@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../hooks/useWallet';
 import { Wallet, Plus, KeyRound, Copy, Check, RefreshCw } from 'lucide-react';
 import LoadingSpinner from '../components/LoadingSpinner';
+import ExplorerLink from '../components/ExplorerLink';
 
 export default function WalletPage() {
   const { wallet, loading, createNewWallet, loginWithSeed, refreshBalance, logout } = useWallet();
@@ -64,9 +65,9 @@ export default function WalletPage() {
             <div>
               <label className="text-xs text-surface-500 uppercase tracking-wider">Address</label>
               <div className="mt-1 flex items-center gap-2">
-                <code className="flex-1 bg-surface-800 rounded-lg px-3 py-2 text-sm font-mono text-surface-300 break-all">
-                  {wallet.address}
-                </code>
+                <div className="flex-1 bg-surface-800 rounded-lg px-3 py-2">
+                  <ExplorerLink type="account" value={wallet.address} truncate={false} />
+                </div>
                 <button
                   onClick={() => copyToClipboard(wallet.address)}
                   className="p-2 bg-surface-800 rounded-lg hover:bg-surface-700 transition-colors"

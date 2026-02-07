@@ -13,6 +13,7 @@ import * as api from '../services/api';
 import NFTCard from '../components/NFTCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import StatusBadge from '../components/StatusBadge';
+import ExplorerLink from '../components/ExplorerLink';
 
 export default function Portfolio() {
   const { wallet } = useWallet();
@@ -74,9 +75,9 @@ export default function Portfolio() {
             <Briefcase className="w-8 h-8 text-primary-400" />
             Portfolio
           </h1>
-          <p className="text-surface-400 mt-1 font-mono text-sm">
-            {wallet.address.slice(0, 10)}...{wallet.address.slice(-6)}
-          </p>
+          <div className="mt-1">
+            <ExplorerLink type="account" value={wallet.address} />
+          </div>
         </div>
         <button
           onClick={loadPortfolio}
@@ -175,6 +176,7 @@ export default function Portfolio() {
                     <th className="text-left px-4 py-3 text-xs text-surface-500 uppercase tracking-wider">Type</th>
                     <th className="text-left px-4 py-3 text-xs text-surface-500 uppercase tracking-wider">Asset</th>
                     <th className="text-left px-4 py-3 text-xs text-surface-500 uppercase tracking-wider">Amount</th>
+                    <th className="text-left px-4 py-3 text-xs text-surface-500 uppercase tracking-wider hidden sm:table-cell">TX Hash</th>
                     <th className="text-left px-4 py-3 text-xs text-surface-500 uppercase tracking-wider">Status</th>
                     <th className="text-left px-4 py-3 text-xs text-surface-500 uppercase tracking-wider hidden md:table-cell">Date</th>
                   </tr>
@@ -186,6 +188,9 @@ export default function Portfolio() {
                       <td className="px-4 py-3 text-sm text-surface-400">{tx.asset_name || '-'}</td>
                       <td className="px-4 py-3 text-sm">
                         {tx.amount_xrp ? `${parseFloat(tx.amount_xrp).toFixed(1)} XRP` : '-'}
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        <ExplorerLink type="tx" value={tx.tx_hash} />
                       </td>
                       <td className="px-4 py-3"><StatusBadge status={tx.status} /></td>
                       <td className="px-4 py-3 text-xs text-surface-500 hidden md:table-cell">
@@ -209,15 +214,11 @@ export default function Portfolio() {
               {royaltyEarnings.earnings.map((e) => (
                 <div key={e.id} className="bg-surface-900 border border-surface-800 rounded-xl p-4 flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{e.pool_name}</p>
-                    <p className="text-xs text-surface-500 mt-1">
-                      {e.asset_name}
-                    </p>
-                    {e.tx_hash && (
-                      <p className="text-xs text-surface-600 mt-1 font-mono">
-                        TX: {e.tx_hash.slice(0, 16)}...
-                      </p>
-                    )}
+                    <p className="font-medium">{r.asset_name}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-xs text-surface-500">Burn TX:</span>
+                      <ExplorerLink type="tx" value={r.burn_tx_hash} />
+                    </div>
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-green-400">
