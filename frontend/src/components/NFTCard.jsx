@@ -1,9 +1,25 @@
 import { Link } from 'react-router-dom';
 import { Zap } from 'lucide-react';
 
+// Resolve image URL: handle ipfs:// links, local /uploads/ paths, and full URLs
+function resolveImageUrl(url) {
+  if (!url) return null;
+  if (url.startsWith('ipfs://')) {
+    const hash = url.replace('ipfs://', '');
+    return `https://gateway.pinata.cloud/ipfs/${hash}`;
+  }
+  if (url.startsWith('/uploads/')) {
+    // Local fallback — served from backend
+    return `http://localhost:3001${url}`;
+  }
+  return url;
+}
+
 export default function NFTCard({ nft }) {
   const isRoyalty = !!nft.royalty_pool_id || nft.asset_type === 'royalty';
   const displayValue = nft.last_sale_price_xrp > 0 ? nft.last_sale_price_xrp : nft.list_price_xrp;
+  const imageUrl = resolveImageUrl(nft.asset_image_url);
+  const hasImage = !!imageUrl;
 
   return (
     <Link
@@ -12,15 +28,19 @@ export default function NFTCard({ nft }) {
     >
       {/* Image */}
       <div className="aspect-square bg-gradient-to-br from-primary-900/50 to-surface-800 relative overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <Zap className="w-12 h-12 text-primary-500/50 mx-auto mb-2" />
-            <p className="text-sm font-semibold text-surface-400 capitalize">{nft.asset_type || 'Digital Asset'}</p>
-            {isRoyalty && nft.royalty_percentage && (
-              <p className="text-xs text-purple-400 mt-1 font-bold">{nft.royalty_percentage}% Royalty</p>
-            )}
+        {hasImage ? (
+          <img src={imageUrl} alt={nft.asset_name} className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <Zap className="w-12 h-12 text-primary-500/50 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-surface-400 capitalize">{nft.asset_type || 'Digital Asset'}</p>
+              {isRoyalty && nft.royalty_percentage && (
+                <p className="text-xs text-purple-400 mt-1 font-bold">{nft.royalty_percentage}% Royalty</p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Status Badge */}
         <div className="absolute top-3 left-3 flex items-center gap-1">
