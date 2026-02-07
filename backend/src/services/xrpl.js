@@ -3,18 +3,42 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const XRPL_NETWORK = process.env.XRPL_NETWORK || 'wss://s.altnet.rippletest.net:51233';
+// Testnet servers in priority order (the Ripple default is often down)
+const TESTNET_SERVERS = [
+  'wss://testnet.xrpl-labs.com',
+  'wss://s.altnet.rippletest.net:51233',
+  'wss://clio.altnet.rippletest.net:51233',
+];
+
+const CONNECTION_TIMEOUT = 20000; // 20 seconds
 
 let client = null;
 
 // ─── Connection Management ───────────────────────────────────────
 export async function getClient() {
-  if (!client || !client.isConnected()) {
-    client = new xrpl.Client(XRPL_NETWORK);
-    await client.connect();
-    console.log('Connected to XRPL Testnet');
+  if (client && client.isConnected()) {
+    return client;
   }
-  return client;
+
+  // Try each server until one connects
+  const servers = process.env.XRPL_NETWORK
+    ? [process.env.XRPL_NETWORK, ...TESTNET_SERVERS]
+    : TESTNET_SERVERS;
+
+  for (const server of servers) {
+    try {
+      console.log(`Attempting XRPL connection to ${server}...`);
+      client = new xrpl.Client(server, { connectionTimeout: CONNECTION_TIMEOUT });
+      await client.connect();
+      console.log(`Connected to XRPL Testnet via ${server}`);
+      return client;
+    } catch (err) {
+      console.warn(`Failed to connect to ${server}: ${err.message}`);
+      client = null;
+    }
+  }
+
+  throw new Error('Could not connect to any XRPL Testnet server. Check your internet connection.');
 }
 
 export async function disconnectClient() {

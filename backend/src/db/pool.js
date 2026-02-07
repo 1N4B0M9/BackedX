@@ -14,30 +14,41 @@ function generateId() {
 }
 
 /**
+ * Convert PostgreSQL-style $N params to SQLite ? params,
+ * expanding the params array when $N values are reused.
+ */
+function convertParams(text, params) {
+  const expandedParams = [];
+  const sql = text.replace(/\$(\d+)/g, (match, num) => {
+    const idx = parseInt(num, 10) - 1; // $1 → index 0
+    expandedParams.push(params[idx]);
+    return '?';
+  });
+  return { sql, params: expandedParams };
+}
+
+/**
  * Compatibility wrapper that mimics pg.Pool's query interface.
  */
 const pool = {
   query(text, params = []) {
-    // Replace PostgreSQL $N placeholders with ?
-    let paramIndex = 0;
-    const sqliteText = text.replace(/\$\d+/g, () => '?');
+    const { sql: rawSql, params: expandedParams } = convertParams(text, params);
 
     // Replace PostgreSQL-specific functions
-    let sql = sqliteText
+    let sql = rawSql
       .replace(/gen_random_uuid\(\)/g, `'${generateId()}'`)
-      .replace(/NOW\(\)/gi, "datetime('now')")
-      .replace(/COALESCE/gi, 'COALESCE');
+      .replace(/NOW\(\)/gi, "datetime('now')");
 
     const trimmed = sql.trim().toUpperCase();
-    const hasReturning = sql.toUpperCase().includes('RETURNING');
+    const hasReturning = /\bRETURNING\b/i.test(sql);
 
     if (hasReturning && !trimmed.startsWith('SELECT')) {
       // Strip RETURNING clause for the write operation
-      const returningMatch = sql.match(/\s+RETURNING\s+(.+?)$/i);
+      const returningMatch = sql.match(/\s+RETURNING\s+(.+?)$/is);
       const returningCols = returningMatch ? returningMatch[1].trim() : '*';
-      const writeSQL = sql.replace(/\s+RETURNING\s+.+$/i, '');
+      const writeSQL = sql.replace(/\s+RETURNING\s+.+$/is, '');
 
-      const info = db.prepare(writeSQL).run(...params);
+      const info = db.prepare(writeSQL).run(...expandedParams);
 
       // Re-fetch the affected row
       if (trimmed.startsWith('INSERT')) {
@@ -50,12 +61,12 @@ const pool = {
 
       if (trimmed.startsWith('UPDATE')) {
         const tableName = writeSQL.match(/UPDATE\s+(\w+)/i)?.[1];
-        const whereMatch = writeSQL.match(/WHERE\s+(.+)$/i);
+        const whereMatch = writeSQL.match(/\bWHERE\s+(.+)$/is);
         if (tableName && whereMatch) {
           const whereClause = whereMatch[1];
-          const beforeWhere = writeSQL.substring(0, writeSQL.search(/WHERE/i));
+          const beforeWhere = writeSQL.substring(0, writeSQL.search(/\bWHERE\b/i));
           const paramsBefore = (beforeWhere.match(/\?/g) || []).length;
-          const whereParams = params.slice(paramsBefore);
+          const whereParams = expandedParams.slice(paramsBefore);
           try {
             const rows = db.prepare(`SELECT ${returningCols} FROM ${tableName} WHERE ${whereClause}`).all(...whereParams);
             return { rows, rowCount: info.changes };
@@ -69,12 +80,12 @@ const pool = {
     }
 
     if (trimmed.startsWith('SELECT')) {
-      const rows = db.prepare(sql).all(...params);
+      const rows = db.prepare(sql).all(...expandedParams);
       return { rows };
     }
 
     // Write operations (INSERT, UPDATE, DELETE without RETURNING)
-    const info = db.prepare(sql).run(...params);
+    const info = db.prepare(sql).run(...expandedParams);
     return { rows: [], rowCount: info.changes };
   },
 };
