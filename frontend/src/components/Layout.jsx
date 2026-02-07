@@ -1,13 +1,14 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useWallet } from '../hooks/useWallet';
 import {
   Home,
   Plus,
   ShoppingBag,
-  Wallet,
   Briefcase,
+  Search,
+  CreditCard,
   LogOut,
-  Zap,
 } from 'lucide-react';
 
 const navItems = [
@@ -15,109 +16,138 @@ const navItems = [
   { path: '/dashboard', label: 'Create', icon: Plus },
   { path: '/marketplace', label: 'Marketplace', icon: ShoppingBag },
   { path: '/portfolio', label: 'Portfolio', icon: Briefcase },
-  { path: '/wallet', label: 'Wallet', icon: Wallet },
+  { path: '/wallet', label: 'Wallet', icon: CreditCard },
 ];
 
 export default function Layout({ children }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { wallet, logout } = useWallet();
+  const [search, setSearch] = useState('');
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (search.trim()) {
+      navigate(`/marketplace?q=${encodeURIComponent(search.trim())}`);
+    } else {
+      navigate('/marketplace');
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="border-b border-surface-800 bg-surface-950/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <Link to="/" className="flex items-center gap-3 group">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center">
-                <Zap className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <span className="text-lg font-bold bg-gradient-to-r from-primary-400 to-accent-400 bg-clip-text text-transparent">
-                  Digital Asset Tartan
-                </span>
-                <span className="hidden sm:block text-[10px] text-surface-500 -mt-1">
-                  Tokenize Any Asset on XRPL
-                </span>
-              </div>
-            </Link>
+      {/* Header - XChange style */}
+      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-10 py-3 bg-black/30 backdrop-blur-[20px] border-b border-white/8">
+        {/* Logo */}
+        <Link to="/" className="text-white text-lg font-medium tracking-wide shrink-0">
+          XChange
+        </Link>
 
-            {/* Navigation */}
-            <nav className="hidden md:flex items-center gap-1">
-              {navItems.map(({ path, label, icon: Icon }) => {
-                const isActive = location.pathname === path;
-                return (
-                  <Link
-                    key={path}
-                    to={path}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                      isActive
-                        ? 'bg-primary-600/20 text-primary-400'
-                        : 'text-surface-400 hover:text-white hover:bg-surface-800'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {label}
-                  </Link>
-                );
-              })}
-            </nav>
+        {/* Center search bar - hidden on mobile */}
+        <form
+          onSubmit={handleSearch}
+          className="hidden md:flex flex-1 items-center max-w-[500px] mx-4 lg:mx-6 bg-white/8 rounded-[20px] pl-4 pr-4 py-2.5 border border-white/10"
+        >
+          <Search className="w-[18px] h-[18px] text-white/90 shrink-0" strokeWidth={2} />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search marketplace..."
+            className="w-full bg-transparent border-0 outline-none text-white text-sm ml-2.5 placeholder:text-white/60"
+          />
+        </form>
 
-            {/* Wallet Status */}
-            <div className="flex items-center gap-3">
-              {wallet ? (
-                <div className="flex items-center gap-3">
-                  <div className="hidden sm:block text-right">
-                    <p className="text-xs text-surface-400">Balance</p>
-                    <p className="text-sm font-semibold text-primary-400">
-                      {parseFloat(wallet.balance).toFixed(2)} XRP
-                    </p>
-                  </div>
-                  <div className="px-3 py-1.5 bg-surface-800 rounded-lg text-xs font-mono text-surface-300">
-                    {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
-                  </div>
-                  <button
-                    onClick={logout}
-                    className="p-2 text-surface-500 hover:text-red-400 transition-colors"
-                    title="Disconnect"
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <Link
-                  to="/wallet"
-                  className="px-4 py-2 bg-primary-600 hover:bg-primary-500 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Connect Wallet
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile Navigation */}
-        <div className="md:hidden border-t border-surface-800">
-          <div className="flex justify-around py-2">
+        {/* Right - nav icons + wallet */}
+        <div className="flex items-center gap-2 shrink-0">
+          <nav className="hidden md:flex items-center gap-2">
             {navItems.map(({ path, label, icon: Icon }) => {
               const isActive = location.pathname === path;
               return (
                 <Link
                   key={path}
                   to={path}
-                  className={`flex flex-col items-center gap-1 px-2 py-1 text-xs ${
-                    isActive ? 'text-primary-400' : 'text-surface-500'
+                  title={label}
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center transition-opacity hover:opacity-70 focus:outline-none focus:ring-0 ${
+                    isActive ? 'text-white' : 'text-white/90'
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
-                  {label}
+                  <Icon className="w-[22px] h-[22px]" strokeWidth={2} />
                 </Link>
               );
             })}
+          </nav>
+          {/* Wallet status */}
+          <div className="flex items-center gap-2 ml-1 border-l border-white/10 pl-2">
+            {wallet ? (
+              <>
+                <div className="hidden sm:block text-right">
+                  <p className="text-[10px] text-white/50">Balance</p>
+                  <p className="text-xs font-semibold text-white">
+                    {parseFloat(wallet.balance ?? 0).toFixed(2)} XRP
+                  </p>
+                </div>
+                <div className="px-2 py-1 bg-white/10 rounded-lg text-[10px] font-mono text-white/90">
+                  {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                </div>
+                <button
+                  onClick={logout}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Disconnect"
+                >
+                  <LogOut className="w-4 h-4" strokeWidth={2} />
+                </button>
+              </>
+            ) : (
+              <Link
+                to="/wallet"
+                className="px-3 py-2 bg-white/15 hover:bg-white/25 rounded-xl text-xs font-medium text-white transition-colors"
+              >
+                Connect Wallet
+              </Link>
+            )}
           </div>
         </div>
+
+        {/* Mobile: icons only (no search, wallet at end) */}
+        <nav className="md:hidden flex items-center gap-1">
+          {navItems.map(({ path, label, icon: Icon }) => {
+            const isActive = location.pathname === path;
+            return (
+              <Link
+                key={path}
+                to={path}
+                title={label}
+                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-opacity ${
+                  isActive ? 'text-white' : 'text-white/80'
+                }`}
+              >
+                <Icon className="w-[22px] h-[22px]" strokeWidth={2} />
+              </Link>
+            );
+          })}
+          {wallet ? (
+            <button
+              onClick={logout}
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-white/80"
+              title="Disconnect"
+            >
+              <LogOut className="w-[22px] h-[22px]" strokeWidth={2} />
+            </button>
+          ) : (
+            <Link
+              to="/wallet"
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-white/80"
+              title="Connect Wallet"
+            >
+              <CreditCard className="w-[22px] h-[22px]" strokeWidth={2} />
+            </Link>
+          )}
+        </nav>
       </header>
+
+      {/* Spacer for fixed header */}
+      <div className="h-14 shrink-0" />
 
       {/* Main Content */}
       <main className="flex-1">
