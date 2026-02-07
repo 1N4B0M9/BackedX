@@ -3,10 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '../hooks/useWallet';
 import {
   ArrowLeft,
-  Shield,
   ShieldCheck,
   Coins,
-  ExternalLink,
   ArrowRightLeft,
   AlertCircle,
   RefreshCw,
@@ -15,6 +13,7 @@ import {
 import * as api from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import StatusBadge from '../components/StatusBadge';
+import ExplorerLink from '../components/ExplorerLink';
 
 export default function NFTDetail() {
   const { id } = useParams();
@@ -56,7 +55,7 @@ export default function NFTDetail() {
     setSuccess('');
     try {
       const { data } = await api.purchaseNFT(id, wallet.address, wallet.seed);
-      setSuccess(`Purchase successful! TX: ${data.txHash?.slice(0, 16)}...`);
+      setSuccess({ message: 'Purchase successful!', txHash: data.txHash });
       loadNFT();
     } catch (err) {
       setError(err.response?.data?.error || 'Purchase failed');
@@ -71,7 +70,7 @@ export default function NFTDetail() {
     setSuccess('');
     try {
       const { data } = await api.redeemNFT(id, wallet.address, wallet.seed);
-      setSuccess(`Redeemed! ${data.redemption.amountXrp} XRP released. Burn TX: ${data.redemption.burnTxHash?.slice(0, 16)}...`);
+      setSuccess({ message: `Redeemed! ${data.redemption.amountXrp} XRP released.`, txHash: data.redemption.burnTxHash });
       loadNFT();
     } catch (err) {
       setError(err.response?.data?.error || 'Redemption failed');
@@ -165,9 +164,13 @@ export default function NFTDetail() {
             </div>
             <div className="bg-surface-900 border border-surface-800 rounded-xl p-4">
               <p className="text-xs text-surface-500 uppercase tracking-wider">Token ID</p>
-              <p className="text-xs font-mono text-surface-400 mt-1 break-all">
-                {nft.token_id ? `${nft.token_id.slice(0, 12)}...${nft.token_id.slice(-8)}` : 'N/A'}
-              </p>
+              <div className="mt-1">
+                {nft.token_id ? (
+                  <ExplorerLink type="nft" value={nft.token_id} />
+                ) : (
+                  <span className="text-xs text-surface-400">N/A</span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -177,7 +180,7 @@ export default function NFTDetail() {
               <p className="text-xs text-surface-500 uppercase tracking-wider mb-1">
                 {isOwner ? 'You Own This NFT' : 'Current Owner'}
               </p>
-              <code className="text-sm font-mono text-surface-300">{nft.owner_address}</code>
+              <ExplorerLink type="account" value={nft.owner_address} truncate={false} />
             </div>
           )}
 
@@ -247,7 +250,13 @@ export default function NFTDetail() {
           )}
           {success && (
             <div className="p-3 bg-green-900/20 border border-green-800 rounded-xl text-sm text-green-400">
-              {success}
+              <p>{success.message || success}</p>
+              {success.txHash && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-green-500/70">TX:</span>
+                  <ExplorerLink type="tx" value={success.txHash} />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -278,11 +287,7 @@ export default function NFTDetail() {
                       {tx.amount_xrp ? `${parseFloat(tx.amount_xrp).toFixed(1)} XRP` : '-'}
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
-                      {tx.tx_hash ? (
-                        <code className="text-xs font-mono text-surface-400">
-                          {tx.tx_hash.slice(0, 12)}...
-                        </code>
-                      ) : '-'}
+                      <ExplorerLink type="tx" value={tx.tx_hash} />
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={tx.status} />

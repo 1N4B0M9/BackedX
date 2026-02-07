@@ -11,7 +11,7 @@ Transform real-world assets into verifiable, tradeable NFTs backed by XRP escrow
 ### Prerequisites
 
 - **Node.js** 18+ ([download](https://nodejs.org))
-- **PostgreSQL** running locally ([download](https://www.postgresql.org/download/) or `brew install postgresql`)
+- No external database needed -- uses **SQLite** (embedded, zero-config)
 
 ### 1. Install Dependencies
 
@@ -23,10 +23,7 @@ npm run install:all
 ### 2. Set Up Database
 
 ```bash
-# Create the database
-createdb digital_asset_tartan
-
-# Initialize schema
+# Initialize SQLite schema (creates backend/data.db automatically)
 npm run db:init
 ```
 
@@ -35,9 +32,15 @@ npm run db:init
 The backend `.env` file is pre-configured for local development. Edit `backend/.env` if needed:
 
 ```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/digital_asset_tartan
 XRPL_NETWORK=wss://s.altnet.rippletest.net:51233
 PORT=3001
+FRONTEND_URL=http://localhost:5173
+```
+
+Optionally add Pinata keys for real IPFS pinning (otherwise metadata is mocked):
+```env
+PINATA_API_KEY=your_key
+PINATA_SECRET_KEY=your_secret
 ```
 
 ### 4. Start the App
@@ -91,7 +94,7 @@ npm run dev
 └─────────────────┘     └────────┬────────┘     └──────────────┘
                                  │
                          ┌───────▼────────┐
-                         │   PostgreSQL    │
+                         │    SQLite       │
                          │  (off-chain)    │
                          └────────────────┘
 ```
@@ -127,7 +130,7 @@ npm run dev
 | Frontend | React 19, Vite 6, TailwindCSS 4 |
 | Backend | Node.js, Express |
 | Blockchain | XRPL Testnet (xrpl.js v4) |
-| Database | PostgreSQL |
+| Database | SQLite (better-sqlite3) |
 | Icons | Lucide React |
 
 ---
@@ -140,7 +143,7 @@ DigitalAssetTartan/
 │   └── src/
 │       ├── server.js          # Express server
 │       ├── db/
-│       │   ├── pool.js        # PostgreSQL connection
+│       │   ├── pool.js        # SQLite connection (pg-compat wrapper)
 │       │   └── init.js        # Schema initialization
 │       ├── routes/
 │       │   ├── company.js     # Company registration & minting
