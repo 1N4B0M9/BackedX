@@ -1,0 +1,290 @@
+import xrpl from 'xrpl';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const XRPL_NETWORK = process.env.XRPL_NETWORK || 'wss://s.altnet.rippletest.net:51233';
+
+let client = null;
+
+// ─── Connection Management ───────────────────────────────────────
+export async function getClient() {
+  if (!client || !client.isConnected()) {
+    client = new xrpl.Client(XRPL_NETWORK);
+    await client.connect();
+    console.log('Connected to XRPL Testnet');
+  }
+  return client;
+}
+
+export async function disconnectClient() {
+  if (client && client.isConnected()) {
+    await client.disconnect();
+    client = null;
+  }
+}
+
+// ─── Wallet Management ──────────────────────────────────────────
+export async function createTestnetWallet() {
+  const c = await getClient();
+  const fundResult = await c.fundWallet();
+  return {
+    address: fundResult.wallet.address,
+    seed: fundResult.wallet.seed,
+    balance: fundResult.balance,
+  };
+}
+
+export function walletFromSeed(seed) {
+  return xrpl.Wallet.fromSeed(seed);
+}
+
+export async function getBalance(address) {
+  const c = await getClient();
+  try {
+    const response = await c.request({
+      command: 'account_info',
+      account: address,
+      ledger_index: 'validated',
+    });
+    return xrpl.dropsToXrp(response.result.account_data.Balance);
+  } catch (err) {
+    if (err.data?.error === 'actNotFound') return '0';
+    throw err;
+  }
+}
+
+// ─── Escrow ─────────────────────────────────────────────────────
+export async function createEscrow(senderSeed, amountXrp, destinationAddress, conditionHex) {
+  const c = await getClient();
+  const wallet = xrpl.Wallet.fromSeed(senderSeed);
+
+  // Escrow finishes 1 minute from now (for demo purposes — short window)
+  const finishAfter = xrpl.isoTimeToRippleTime(
+    new Date(Date.now() + 60 * 1000).toISOString()
+  );
+
+  // Cancel after 30 days
+  const cancelAfter = xrpl.isoTimeToRippleTime(
+    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  );
+
+  const escrowCreate = {
+    TransactionType: 'EscrowCreate',
+    Account: wallet.address,
+    Amount: xrpl.xrpToDrops(amountXrp.toString()),
+    Destination: destinationAddress,
+    FinishAfter: finishAfter,
+    CancelAfter: cancelAfter,
+  };
+
+  const prepared = await c.autofill(escrowCreate);
+  const signed = wallet.sign(prepared);
+  const result = await c.submitAndWait(signed.tx_blob);
+
+  return {
+    txHash: result.result.hash,
+    sequence: prepared.Sequence,
+    finishAfter,
+    cancelAfter,
+  };
+}
+
+export async function finishEscrow(finisherSeed, escrowOwnerAddress, escrowSequence) {
+  const c = await getClient();
+  const wallet = xrpl.Wallet.fromSeed(finisherSeed);
+
+  const escrowFinish = {
+    TransactionType: 'EscrowFinish',
+    Account: wallet.address,
+    Owner: escrowOwnerAddress,
+    OfferSequence: escrowSequence,
+  };
+
+  const prepared = await c.autofill(escrowFinish);
+  const signed = wallet.sign(prepared);
+  const result = await c.submitAndWait(signed.tx_blob);
+
+  return {
+    txHash: result.result.hash,
+    status: result.result.meta.TransactionResult,
+  };
+}
+
+// ─── NFT (NFToken) Operations ────────────────────────────────────
+export async function mintNFT(issuerSeed, metadataUri, transferFee = 500) {
+  const c = await getClient();
+  const wallet = xrpl.Wallet.fromSeed(issuerSeed);
+
+  // Convert URI to hex
+  const uriHex = Buffer.from(metadataUri, 'utf8').toString('hex').toUpperCase();
+
+  const mintTx = {
+    TransactionType: 'NFTokenMint',
+    Account: wallet.address,
+    URI: uriHex,
+    // tfBurnable (1) + tfTransferable (8) = 9 → flags
+    Flags: 9,
+    TransferFee: transferFee, // 5% royalty (500 basis points)
+    NFTokenTaxon: 0,
+  };
+
+  const prepared = await c.autofill(mintTx);
+  const signed = wallet.sign(prepared);
+  const result = await c.submitAndWait(signed.tx_blob);
+
+  // Extract the NFTokenID from the metadata
+  const nfts = await getAccountNFTs(wallet.address);
+  // The newest NFT should be the one we just minted
+  const tokenId = extractNewTokenId(result.result.meta);
+
+  return {
+    txHash: result.result.hash,
+    tokenId: tokenId || (nfts.length > 0 ? nfts[nfts.length - 1].NFTokenID : null),
+    issuer: wallet.address,
+  };
+}
+
+function extractNewTokenId(meta) {
+  // Walk through affected nodes to find the new NFTokenID
+  if (!meta?.AffectedNodes) return null;
+  for (const node of meta.AffectedNodes) {
+    const modified = node.ModifiedNode || node.CreatedNode;
+    if (!modified) continue;
+    if (modified.LedgerEntryType === 'NFTokenPage') {
+      const finalTokens = modified.FinalFields?.NFTokens || modified.NewFields?.NFTokens || [];
+      const prevTokens = modified.PreviousFields?.NFTokens || [];
+      // Find token in final but not in previous
+      const prevIds = new Set(prevTokens.map((t) => t.NFToken.NFTokenID));
+      for (const t of finalTokens) {
+        if (!prevIds.has(t.NFToken.NFTokenID)) {
+          return t.NFToken.NFTokenID;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+export async function createSellOffer(ownerSeed, tokenId, amountXrp, destination = null) {
+  const c = await getClient();
+  const wallet = xrpl.Wallet.fromSeed(ownerSeed);
+
+  const offerTx = {
+    TransactionType: 'NFTokenCreateOffer',
+    Account: wallet.address,
+    NFTokenID: tokenId,
+    Amount: xrpl.xrpToDrops(amountXrp.toString()),
+    Flags: 1, // tfSellNFToken
+  };
+
+  if (destination) {
+    offerTx.Destination = destination;
+  }
+
+  const prepared = await c.autofill(offerTx);
+  const signed = wallet.sign(prepared);
+  const result = await c.submitAndWait(signed.tx_blob);
+
+  // Extract offer index from meta
+  let offerIndex = null;
+  if (result.result.meta?.AffectedNodes) {
+    for (const node of result.result.meta.AffectedNodes) {
+      if (node.CreatedNode?.LedgerEntryType === 'NFTokenOffer') {
+        offerIndex = node.CreatedNode.LedgerIndex;
+        break;
+      }
+    }
+  }
+
+  return {
+    txHash: result.result.hash,
+    offerIndex,
+  };
+}
+
+export async function acceptSellOffer(buyerSeed, sellOfferIndex) {
+  const c = await getClient();
+  const wallet = xrpl.Wallet.fromSeed(buyerSeed);
+
+  const acceptTx = {
+    TransactionType: 'NFTokenAcceptOffer',
+    Account: wallet.address,
+    NFTokenSellOffer: sellOfferIndex,
+  };
+
+  const prepared = await c.autofill(acceptTx);
+  const signed = wallet.sign(prepared);
+  const result = await c.submitAndWait(signed.tx_blob);
+
+  return {
+    txHash: result.result.hash,
+    status: result.result.meta.TransactionResult,
+  };
+}
+
+export async function burnNFT(ownerSeed, tokenId) {
+  const c = await getClient();
+  const wallet = xrpl.Wallet.fromSeed(ownerSeed);
+
+  const burnTx = {
+    TransactionType: 'NFTokenBurn',
+    Account: wallet.address,
+    NFTokenID: tokenId,
+  };
+
+  const prepared = await c.autofill(burnTx);
+  const signed = wallet.sign(prepared);
+  const result = await c.submitAndWait(signed.tx_blob);
+
+  return {
+    txHash: result.result.hash,
+    status: result.result.meta.TransactionResult,
+  };
+}
+
+export async function getAccountNFTs(address) {
+  const c = await getClient();
+  const response = await c.request({
+    command: 'account_nfts',
+    account: address,
+    ledger_index: 'validated',
+  });
+  return response.result.account_nfts || [];
+}
+
+export async function getSellOffers(tokenId) {
+  const c = await getClient();
+  try {
+    const response = await c.request({
+      command: 'nft_sell_offers',
+      nft_id: tokenId,
+      ledger_index: 'validated',
+    });
+    return response.result.offers || [];
+  } catch {
+    return [];
+  }
+}
+
+// ─── Payment ────────────────────────────────────────────────────
+export async function sendPayment(senderSeed, destinationAddress, amountXrp) {
+  const c = await getClient();
+  const wallet = xrpl.Wallet.fromSeed(senderSeed);
+
+  const paymentTx = {
+    TransactionType: 'Payment',
+    Account: wallet.address,
+    Destination: destinationAddress,
+    Amount: xrpl.xrpToDrops(amountXrp.toString()),
+  };
+
+  const prepared = await c.autofill(paymentTx);
+  const signed = wallet.sign(prepared);
+  const result = await c.submitAndWait(signed.tx_blob);
+
+  return {
+    txHash: result.result.hash,
+    status: result.result.meta.TransactionResult,
+  };
+}
