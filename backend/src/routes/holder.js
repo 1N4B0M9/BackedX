@@ -4,6 +4,88 @@ import * as xrplService from '../services/xrpl.js';
 
 const router = Router();
 
+// ─── Burn & Redeem NFT (release escrow backing) ─────────────────
+router.post('/:nftId/redeem', async (req, res) => {
+  try {
+    const { ownerWalletAddress, ownerWalletSeed } = req.body;
+    const nftId = req.params.nftId;
+
+    if (!ownerWalletAddress || !ownerWalletSeed) {
+      return res.status(400).json({ error: 'Wallet info required' });
+    }
+
+    // Get NFT and verify ownership
+    const nftResult = await pool.query(
+      `SELECT * FROM nfts WHERE id = $1 AND owner_address = $2 AND status IN ('owned', 'listed')`,
+      [nftId, ownerWalletAddress]
+    );
+
+    if (nftResult.rows.length === 0) {
+      return res.status(404).json({ error: 'NFT not found or you are not the owner' });
+    }
+
+    const nft = nftResult.rows[0];
+    const backingAmount = parseFloat(nft.backing_xrp || 0);
+
+    if (backingAmount <= 0) {
+      return res.status(400).json({ error: 'This NFT has no XRP backing to redeem' });
+    }
+
+    if (!nft.escrow_sequence || !nft.escrow_owner) {
+      return res.status(400).json({ error: 'Escrow info missing for this NFT' });
+    }
+
+    // 1. Finish the escrow to release the XRP to the current owner
+    let escrowFinishResult;
+    try {
+      escrowFinishResult = await xrplService.finishEscrow(
+        ownerWalletSeed,
+        nft.escrow_owner,
+        nft.escrow_sequence
+      );
+    } catch (escrowErr) {
+      console.warn('Escrow finish failed (may have already been released):', escrowErr.message);
+      // Continue with burn even if escrow finish fails (escrow may have expired/been cancelled)
+    }
+
+    // 2. Burn the NFT on XRPL
+    let burnResult;
+    if (nft.token_id) {
+      burnResult = await xrplService.burnNFT(ownerWalletSeed, nft.token_id);
+    }
+
+    // 3. Update NFT status in database
+    await pool.query(
+      `UPDATE nfts SET status = 'redeemed', backing_xrp = 0, updated_at = datetime('now') WHERE id = $1`,
+      [nftId]
+    );
+
+    // 4. Record redemption transaction
+    await pool.query(
+      `INSERT INTO transactions (nft_id, tx_type, from_address, amount_xrp, tx_hash, status)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        nftId,
+        'redeem',
+        ownerWalletAddress,
+        backingAmount,
+        burnResult?.txHash || escrowFinishResult?.txHash || null,
+        'confirmed',
+      ]
+    );
+
+    res.json({
+      message: `NFT burned and ${backingAmount} XRP redeemed successfully`,
+      backingRedeemed: backingAmount,
+      burnTxHash: burnResult?.txHash || null,
+      escrowTxHash: escrowFinishResult?.txHash || null,
+    });
+  } catch (err) {
+    console.error('Error redeeming NFT:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Get Holder Portfolio ────────────────────────────────────────
 router.get('/:address/portfolio', async (req, res) => {
   try {

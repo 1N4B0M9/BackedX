@@ -15,12 +15,21 @@ const upload = multer({
 // ─── Mint NFTs ──────────────────────────────────────────────────
 router.post('/mint', upload.single('file'), async (req, res) => {
   try {
-    const { walletAddress, assetName, assetDescription, assetType, listPriceXrp, quantity } = req.body;
+    const { walletAddress, assetName, assetDescription, assetType, listPriceXrp, quantity, backingXrp } = req.body;
     const qty = parseInt(quantity) || 1;
     const listPrice = parseFloat(listPriceXrp) || 50;
+    const backing = parseFloat(backingXrp) || 0;
 
     if (!walletAddress) {
       return res.status(400).json({ error: 'Wallet address is required' });
+    }
+
+    if (backing < 0) {
+      return res.status(400).json({ error: 'Backing amount cannot be negative' });
+    }
+
+    if (backing > 0 && backing >= listPrice) {
+      return res.status(400).json({ error: 'Backing amount must be less than the list price' });
     }
 
     // Parse properties from JSON string (sent via FormData)
@@ -68,7 +77,7 @@ router.post('/mint', upload.single('file'), async (req, res) => {
         description: assetDescription || `Digital asset NFT by ${displayName}`,
         imageUrl: contentUrl,
         assetType: assetType || 'digital_asset',
-        backingXrp: 0,
+        backingXrp: backing,
         creatorName: displayName,
         properties: hasProperties ? properties : undefined,
         contentMimeType,
@@ -78,7 +87,18 @@ router.post('/mint', upload.single('file'), async (req, res) => {
       // 2. Mint NFT on XRPL
       const mintResult = await xrplService.mintNFT(userSeed, metadataUri);
 
-      // 3. Create sell offer
+      // 3. Create escrow if backing amount is specified
+      let escrowResult = null;
+      if (backing > 0 && mintResult.tokenId) {
+        // Escrow XRP to the creator's own address (self-escrow as collateral)
+        escrowResult = await xrplService.createEscrow(
+          userSeed,
+          backing,
+          walletAddress // destination is self — funds locked as backing
+        );
+      }
+
+      // 4. Create sell offer
       let sellOffer = null;
       if (mintResult.tokenId) {
         sellOffer = await xrplService.createSellOffer(
@@ -88,12 +108,13 @@ router.post('/mint', upload.single('file'), async (req, res) => {
         );
       }
 
-      // 4. Store in database
+      // 5. Store in database
       const nftResult = await pool.query(
         `INSERT INTO nfts (token_id, creator_address, asset_type, asset_name, asset_description,
          asset_image_url, metadata_uri, properties, backing_xrp, list_price_xrp,
-         last_sale_price_xrp, sale_count, status, owner_address)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         last_sale_price_xrp, sale_count, escrow_sequence, escrow_owner, escrow_tx_hash,
+         status, owner_address)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
          RETURNING *`,
         [
           mintResult.tokenId,
@@ -104,31 +125,44 @@ router.post('/mint', upload.single('file'), async (req, res) => {
           contentUrl,
           metadataUri,
           JSON.stringify(properties),
-          0,
+          backing,
           listPrice,
           0,
           0,
+          escrowResult?.sequence || null,
+          escrowResult ? walletAddress : null,
+          escrowResult?.txHash || null,
           'listed',
           walletAddress,
         ]
       );
 
-      // 5. Record transaction
+      // 6. Record mint transaction
       await pool.query(
         `INSERT INTO transactions (nft_id, tx_type, from_address, amount_xrp, tx_hash, status)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [nftResult.rows[0].id, 'mint', walletAddress, 0, mintResult.txHash, 'confirmed']
       );
 
+      // 7. Record escrow transaction if applicable
+      if (escrowResult) {
+        await pool.query(
+          `INSERT INTO transactions (nft_id, tx_type, from_address, amount_xrp, tx_hash, status)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [nftResult.rows[0].id, 'escrow_create', walletAddress, backing, escrowResult.txHash, 'confirmed']
+        );
+      }
+
       mintedNFTs.push({
         nft: nftResult.rows[0],
         mintTx: mintResult.txHash,
+        escrowTx: escrowResult?.txHash || null,
         sellOfferIndex: sellOffer?.offerIndex || null,
       });
     }
 
     res.json({
-      message: `Successfully minted ${qty} NFT(s)`,
+      message: `Successfully minted ${qty} NFT(s)${backing > 0 ? ` with ${backing} XRP backing each` : ''}`,
       nfts: mintedNFTs,
     });
   } catch (err) {

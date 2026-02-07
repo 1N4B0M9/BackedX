@@ -19,6 +19,8 @@ import {
   Upload,
   X,
   Settings2,
+  Lock,
+  Shield,
 } from 'lucide-react';
 import * as api from '../services/api';
 import { useToast } from '../components/Toast';
@@ -55,6 +57,7 @@ export default function Dashboard() {
     assetDescription: '',
     assetType: 'digital_asset',
     listPriceXrp: '50',
+    backingXrp: '1',
     quantity: 1,
   });
 
@@ -121,6 +124,8 @@ export default function Dashboard() {
     if (!mintForm.assetName.trim()) errors.assetName = 'Asset name is required';
     if (mintForm.assetName.length > 100) errors.assetName = 'Name must be under 100 characters';
     if (!mintForm.listPriceXrp || parseFloat(mintForm.listPriceXrp) <= 0) errors.listPriceXrp = 'Price must be greater than 0';
+    if (mintForm.backingXrp && parseFloat(mintForm.backingXrp) < 0) errors.backingXrp = 'Backing cannot be negative';
+    if (mintForm.backingXrp && parseFloat(mintForm.backingXrp) >= parseFloat(mintForm.listPriceXrp)) errors.backingXrp = 'Backing must be less than list price';
     if (mintForm.quantity < 1 || mintForm.quantity > 20) errors.quantity = 'Quantity must be 1-20';
     setMintErrors(errors);
     return Object.keys(errors).length === 0;
@@ -175,6 +180,7 @@ export default function Dashboard() {
     formData.append('assetDescription', mintForm.assetDescription || 'Digital asset NFT');
     formData.append('assetType', mintForm.assetType);
     formData.append('listPriceXrp', mintForm.listPriceXrp);
+    formData.append('backingXrp', mintForm.backingXrp || '0');
     formData.append('quantity', mintForm.quantity);
     if (Object.keys(propsObj).length > 0) {
       formData.append('properties', JSON.stringify(propsObj));
@@ -185,7 +191,7 @@ export default function Dashboard() {
 
     const { data } = await api.mintNFTs(formData);
     toast({ type: 'success', title: 'NFTs Minted!', message: data.message });  // ui-changes toast
-    setMintForm({ assetName: '', assetDescription: '', assetType: 'digital_asset', listPriceXrp: '50', quantity: 1 });
+    setMintForm({ assetName: '', assetDescription: '', assetType: 'digital_asset', listPriceXrp: '50', backingXrp: '1', quantity: 1 });
     clearFile();                              // from main
     setMintProperties([{ key: '', value: '' }]); // from main
     loadCreatorData();
@@ -253,6 +259,7 @@ export default function Dashboard() {
     asset_name: mintForm.assetName || 'Your Asset Name',
     asset_type: mintForm.assetType,
     list_price_xrp: mintForm.listPriceXrp || 0,
+    backing_xrp: mintForm.backingXrp || 0,
     status: 'listed',
     sale_count: 0,
     last_sale_price_xrp: 0,
@@ -454,6 +461,48 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
+              {/* XRP Backing (Escrow Floor) */}
+              <div>
+                <label className="block text-sm font-medium mb-2 flex items-center gap-1.5">
+                  <Shield className="w-4 h-4 text-amber-400" />
+                  XRP Backing (Floor Value)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={mintForm.backingXrp}
+                    onChange={(e) => {
+                      setMintForm({ ...mintForm, backingXrp: e.target.value });
+                      if (mintErrors.backingXrp) setMintErrors({ ...mintErrors, backingXrp: null });
+                    }}
+                    min="0"
+                    step="0.1"
+                    className={`w-full bg-surface-800 border rounded-xl px-4 py-3 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                      mintErrors.backingXrp ? 'border-red-600' : 'border-surface-700'
+                    }`}
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-surface-500 font-semibold">
+                    XRP
+                  </span>
+                </div>
+                {mintErrors.backingXrp ? (
+                  <p className="text-xs text-red-400 mt-1.5">{mintErrors.backingXrp}</p>
+                ) : (
+                  <p className="text-xs text-surface-600 mt-1.5">
+                    <Lock className="w-3 h-3 inline mr-0.5" />
+                    Locked in XRPL escrow — redeemable by burning the NFT. Set to 0 for no backing.
+                  </p>
+                )}
+                {parseFloat(mintForm.backingXrp) > 0 && (
+                  <div className="mt-2 bg-amber-900/10 border border-amber-800/30 rounded-lg px-3 py-2">
+                    <p className="text-xs text-amber-400">
+                      <strong>Total escrow cost:</strong> {(parseFloat(mintForm.backingXrp || 0) * mintForm.quantity).toFixed(1)} XRP
+                      ({mintForm.quantity} NFT{mintForm.quantity > 1 ? 's' : ''} x {parseFloat(mintForm.backingXrp || 0).toFixed(1)} XRP each)
+                    </p>
+                  </div>
+                )}
+              </div>
+
             {/* ── File Upload ── */}
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium mb-2">
@@ -551,7 +600,10 @@ export default function Dashboard() {
                 ) : (
                   <>
                     <Coins className="w-4 h-4" />
-                    Mint {mintForm.quantity > 1 ? `${mintForm.quantity} NFTs` : 'NFT'} for {parseFloat(mintForm.listPriceXrp || 0).toFixed(1)} XRP each
+                    Mint {mintForm.quantity > 1 ? `${mintForm.quantity} NFTs` : 'NFT'}
+                    {parseFloat(mintForm.backingXrp) > 0
+                      ? ` — ${parseFloat(mintForm.backingXrp || 0).toFixed(1)} XRP backed`
+                      : ` for ${parseFloat(mintForm.listPriceXrp || 0).toFixed(1)} XRP each`}
                   </>
                 )}
               </button>
@@ -578,13 +630,23 @@ export default function Dashboard() {
                         {parseFloat(mintForm.listPriceXrp || 0).toFixed(1)} XRP
                       </p>
                     </div>
-                    {mintForm.quantity > 1 && (
+                    {parseFloat(mintForm.backingXrp) > 0 && (
                       <div className="text-right">
-                        <p className="text-[10px] text-surface-500 uppercase tracking-wider">Qty</p>
-                        <p className="text-sm font-bold text-blue-400">x{mintForm.quantity}</p>
+                        <p className="text-[10px] text-surface-500 uppercase tracking-wider flex items-center gap-0.5 justify-end">
+                          <Lock className="w-2.5 h-2.5" /> Floor
+                        </p>
+                        <p className="text-sm font-bold text-amber-400">
+                          {parseFloat(mintForm.backingXrp || 0).toFixed(1)} XRP
+                        </p>
                       </div>
                     )}
                   </div>
+                  {mintForm.quantity > 1 && (
+                    <div className="mt-2 text-center">
+                      <p className="text-[10px] text-surface-500 uppercase tracking-wider">Quantity</p>
+                      <p className="text-sm font-bold text-blue-400">x{mintForm.quantity}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

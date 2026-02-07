@@ -12,6 +12,9 @@ import {
   Settings2,
   ExternalLink,
   FileText,
+  Lock,
+  Shield,
+  Flame,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import * as api from '../services/api';
@@ -36,6 +39,8 @@ export default function NFTDetail() {
   const [relisting, setRelisting] = useState(false);
   const [relistPrice, setRelistPrice] = useState('');
   const [showRelistForm, setShowRelistForm] = useState(false);
+  const [redeeming, setRedeeming] = useState(false);
+  const [showRedeemConfirm, setShowRedeemConfirm] = useState(false);
 
   useEffect(() => {
     loadNFT();
@@ -97,6 +102,21 @@ export default function NFTDetail() {
     }
   };
 
+  const handleRedeem = async () => {
+    setRedeeming(true);
+    try {
+      const { data } = await api.redeemNFT(id, wallet.address, wallet.seed);
+      toast({ type: 'success', title: 'NFT Redeemed!', message: `${data.backingRedeemed} XRP released to your wallet` });
+      setShowRedeemConfirm(false);
+      loadNFT();
+      refreshBalance();
+    } catch (err) {
+      toast({ type: 'error', title: 'Redemption Failed', message: err.response?.data?.error || 'Redemption failed' });
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
   if (loading) return <SkeletonNFTDetail />;
   if (!nft) {
     return (
@@ -114,6 +134,8 @@ export default function NFTDetail() {
   const canRelist = wallet && nft.status === 'owned' && isOwner;
   const currentValue = nft.last_sale_price_xrp > 0 ? nft.last_sale_price_xrp : nft.list_price_xrp;
   const isRoyaltyNFT = !!nft.royalty_pool_id;
+  const backingXrp = parseFloat(nft.backing_xrp || 0);
+  const canRedeem = isOwner && backingXrp > 0 && nft.status !== 'redeemed';
   const creatorLabel = nft.creator_name || (nft.creator_address ? `${nft.creator_address.slice(0, 10)}...${nft.creator_address.slice(-4)}` : 'Unknown');
 
   // Resolve image URL
@@ -172,6 +194,14 @@ export default function NFTDetail() {
                   {parseFloat(currentValue || 0).toFixed(1)} XRP
                 </p>
               </div>
+              {backingXrp > 0 && (
+                <div className="text-center">
+                  <p className="text-[10px] text-surface-500 uppercase tracking-wider flex items-center gap-0.5 justify-center">
+                    <Lock className="w-2.5 h-2.5" /> Floor
+                  </p>
+                  <p className="text-lg font-bold text-amber-400">{backingXrp.toFixed(1)} XRP</p>
+                </div>
+              )}
               {nft.sale_count > 0 && (
                 <div className="text-right">
                   <p className="text-[10px] text-surface-500 uppercase tracking-wider">Sales</p>
@@ -201,6 +231,26 @@ export default function NFTDetail() {
           {/* Description */}
           {nft.asset_description && (
             <p className="text-surface-300 leading-relaxed">{nft.asset_description}</p>
+          )}
+
+          {/* Escrow Backing Banner */}
+          {backingXrp > 0 && (
+            <div className="bg-amber-900/10 border border-amber-800/30 rounded-xl p-4 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-900/30 flex items-center justify-center shrink-0">
+                <Shield className="w-6 h-6 text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-amber-400">Escrow-Backed NFT</p>
+                <p className="text-sm text-surface-300 mt-0.5">
+                  This NFT has <span className="font-bold text-white">{backingXrp.toFixed(1)} XRP</span> locked
+                  in an XRPL escrow. The owner can burn the NFT at any time to redeem the backing.
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[10px] text-surface-500 uppercase tracking-wider">Guaranteed Floor</p>
+                <p className="text-xl font-bold text-amber-400">{backingXrp.toFixed(1)} XRP</p>
+              </div>
+            </div>
           )}
 
           {/* Details Grid */}
@@ -372,6 +422,56 @@ export default function NFTDetail() {
                   <button
                     onClick={() => { setShowRelistForm(false); setRelistPrice(''); }}
                     className="px-4 py-3 bg-surface-800 hover:bg-surface-700 rounded-xl text-sm transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Burn & Redeem */}
+            {canRedeem && !showRedeemConfirm && (
+              <button
+                onClick={() => setShowRedeemConfirm(true)}
+                className="w-full py-4 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 rounded-xl font-semibold text-lg transition-all flex items-center justify-center gap-3"
+              >
+                <Flame className="w-5 h-5" />
+                Burn & Redeem {backingXrp.toFixed(1)} XRP
+              </button>
+            )}
+
+            {showRedeemConfirm && (
+              <div className="bg-amber-900/10 border border-amber-800/40 rounded-xl p-5 space-y-4">
+                <p className="text-sm font-semibold text-amber-400 flex items-center gap-2">
+                  <Flame className="w-4 h-4" />
+                  Confirm Burn & Redeem
+                </p>
+                <p className="text-sm text-surface-300">
+                  This will <span className="font-bold text-red-400">permanently burn</span> the NFT and release{' '}
+                  <span className="font-bold text-white">{backingXrp.toFixed(1)} XRP</span> from escrow to your wallet.
+                  This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleRedeem}
+                    disabled={redeeming}
+                    className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-surface-700 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
+                  >
+                    {redeeming ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Burning on XRPL...
+                      </>
+                    ) : (
+                      <>
+                        <Flame className="w-4 h-4" />
+                        Burn & Redeem
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setShowRedeemConfirm(false)}
+                    className="px-6 py-3 bg-surface-800 hover:bg-surface-700 rounded-xl text-sm transition-colors"
                   >
                     Cancel
                   </button>

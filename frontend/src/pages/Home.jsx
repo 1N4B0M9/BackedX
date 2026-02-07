@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Music, Palette, Gamepad2, ArrowRightLeft } from 'lucide-react';
+import { Music, Palette, Gamepad2, ArrowRightLeft, Shield } from 'lucide-react';
 
 const HERO_IMAGES = [
   '/s1.jpg',
@@ -40,11 +40,19 @@ const IMAGE_POSITIONS = [
   { bottom: '4%', right: '10%', width: 200, height: 170 },
 ];
 
-/* Slide 0 = hero text, 1-4 = features, 5 = CTA */
+/* Slide 0 = hero text, 1-5 = features, 6 = CTA */
 const SLIDES = [
   {
     isHero: true,
     dotColor: 'bg-primary-300',
+  },
+  {
+    icon: Shield,
+    title: 'Backed by XRP',
+    desc: 'Every NFT can be backed by real XRP locked in escrow. The asset can never go to zero — burn it anytime to redeem the guaranteed floor value.',
+    accentColor: '#fbbf24',
+    iconGradient: 'from-amber-400 to-orange-500',
+    dotColor: 'bg-amber-400',
   },
   {
     icon: Music,
@@ -65,7 +73,7 @@ const SLIDES = [
   {
     icon: Palette,
     title: 'Art & Collectibles',
-    desc: 'Artists list original work backed by XRP on-chain. Provable ownership, transparent pricing, and a global marketplace with no gatekeepers.',
+    desc: 'Artists list original work with guaranteed floor value. Provable ownership, transparent pricing, and a global marketplace with no gatekeepers.',
     accentColor: '#ffc2ca',
     iconGradient: 'from-primary-400 to-primary-600',
     dotColor: 'bg-primary-300',
@@ -267,8 +275,8 @@ export default function Home() {
                   <br />
                   Valuable
                 </h1>
-                <p className="text-xl text-white/60 mb-12 font-light max-w-xl">
-                  Turn any digital creation into a real asset — backed by XRP, traded on an open market.
+                <p className="text-xl text-white/80 mb-12 font-light max-w-xl">
+                  The only NFT marketplace where every asset has guaranteed value — backed by XRP escrow, traded on an open market.
                 </p>
                 <Link
                   to="/marketplace"
@@ -283,7 +291,7 @@ export default function Home() {
                   Your asset. Your market.
                 </h2>
                 <p className="text-lg text-surface-400 mb-12 max-w-lg font-light">
-                  Tokenize what you create, back it with XRP, and let the world decide what it's worth.
+                  Tokenize what you create, lock XRP as a guaranteed floor, and let the world decide what it's worth.
                 </p>
                 <div className="flex flex-wrap items-center justify-center gap-4">
                   <Link to="/dashboard" className="px-8 py-3 bg-primary-600 hover:bg-primary-500 rounded-xl font-semibold transition-all text-white">

@@ -100,17 +100,8 @@ export default function Layout({ children }) {
                   );
                 })}
               </nav>
-              {/* Wallet info */}
-              <div className="flex items-center gap-2 border-l border-white/10 pl-2">
-                <div className="hidden sm:block text-right">
-                  <p className="text-[10px] text-white/50">Balance</p>
-                  <p className="text-xs font-semibold text-white">
-                    {parseFloat(wallet.balance ?? 0).toFixed(2)} XRP
-                  </p>
-                </div>
-                <div className="px-2 py-1 bg-white/10 rounded-lg text-[10px] font-mono text-white/90">
-                  {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
-                </div>
+              {/* Logout */}
+              <div className="flex items-center border-l border-white/10 pl-2">
                 <button
                   onClick={logout}
                   className="w-9 h-9 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors"

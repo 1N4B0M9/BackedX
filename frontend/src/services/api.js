@@ -38,6 +38,9 @@ export const getTransactions = (address) =>
 export const getRoyaltyEarnings = (address) =>
   api.get(`/holder/${address}/royalty-earnings`);
 
+export const redeemNFT = (nftId, ownerWalletAddress, ownerWalletSeed) =>
+  api.post(`/holder/${nftId}/redeem`, { ownerWalletAddress, ownerWalletSeed });
+
 // ─── Royalty ─────────────────────────────────────────────────────
 export const createRoyaltyPool = (data) =>
   api.post('/royalty/pool', data);

@@ -48,6 +48,9 @@ CREATE TABLE IF NOT EXISTS nfts (
   sale_count INTEGER DEFAULT 0,
   royalty_pool_id TEXT REFERENCES royalty_pools(id),
   royalty_percentage REAL,
+  escrow_sequence INTEGER,
+  escrow_owner TEXT,
+  escrow_tx_hash TEXT,
   status TEXT DEFAULT 'minted',
   owner_address TEXT,
   created_at TEXT DEFAULT (datetime('now')),
@@ -106,6 +109,9 @@ CREATE INDEX IF NOT EXISTS idx_royalty_payouts_holder ON royalty_payouts(holder_
 // Migration: add new columns to existing tables (safe to re-run)
 const migrations = [
   "ALTER TABLE nfts ADD COLUMN properties TEXT DEFAULT '{}'",
+  "ALTER TABLE nfts ADD COLUMN escrow_sequence INTEGER",
+  "ALTER TABLE nfts ADD COLUMN escrow_owner TEXT",
+  "ALTER TABLE nfts ADD COLUMN escrow_tx_hash TEXT",
 ];
 
 try {

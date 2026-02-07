@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { Lock } from 'lucide-react';
 import NFTVisual from './NFTVisual';
 
 // Resolve image URL: handle ipfs:// links, local /uploads/ paths, and full URLs
@@ -18,6 +19,7 @@ function resolveImageUrl(url) {
 export default function NFTCard({ nft }) {
   const isRoyalty = !!nft.royalty_pool_id || nft.asset_type === 'royalty';
   const displayValue = nft.last_sale_price_xrp > 0 ? nft.last_sale_price_xrp : nft.list_price_xrp;
+  const backingXrp = parseFloat(nft.backing_xrp || 0);
   const imageUrl = resolveImageUrl(nft.asset_image_url);
   const hasImage = !!imageUrl;
 
@@ -53,6 +55,16 @@ export default function NFTCard({ nft }) {
             </span>
           )}
         </div>
+
+        {/* Backing badge */}
+        {backingXrp > 0 && (
+          <div className="absolute bottom-3 left-3 bg-amber-900/80 backdrop-blur-sm px-2 py-1 rounded-full z-20 flex items-center gap-1">
+            <Lock className="w-2.5 h-2.5 text-amber-400" />
+            <span className="text-[10px] text-amber-300 font-medium">
+              {backingXrp.toFixed(1)} XRP
+            </span>
+          </div>
+        )}
 
         {/* Sale count badge */}
         {nft.sale_count > 0 && (
