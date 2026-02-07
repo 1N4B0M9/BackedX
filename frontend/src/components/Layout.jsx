@@ -1,14 +1,20 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useWallet } from '../hooks/useWallet';
 import {
-  Building2,
+  Home,
+  Plus,
+  ShoppingBag,
   Briefcase,
   Search,
   CreditCard,
+  LogOut,
 } from 'lucide-react';
 
 const navItems = [
-  { path: '/company', label: 'Company', icon: Building2 },
+  { path: '/', label: 'Home', icon: Home },
+  { path: '/dashboard', label: 'Create', icon: Plus },
+  { path: '/marketplace', label: 'Marketplace', icon: ShoppingBag },
   { path: '/portfolio', label: 'Portfolio', icon: Briefcase },
   { path: '/wallet', label: 'Wallet', icon: CreditCard },
 ];
@@ -16,6 +22,7 @@ const navItems = [
 export default function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { wallet, logout } = useWallet();
   const [search, setSearch] = useState('');
 
   const handleSearch = (e) => {
@@ -51,26 +58,58 @@ export default function Layout({ children }) {
           />
         </form>
 
-        {/* Right - 3 icon buttons */}
-        <nav className="hidden md:flex items-center gap-2 shrink-0">
-          {navItems.map(({ path, label, icon: Icon }) => {
-            const isActive = location.pathname === path;
-            return (
+        {/* Right - nav icons + wallet */}
+        <div className="flex items-center gap-2 shrink-0">
+          <nav className="hidden md:flex items-center gap-2">
+            {navItems.map(({ path, label, icon: Icon }) => {
+              const isActive = location.pathname === path;
+              return (
+                <Link
+                  key={path}
+                  to={path}
+                  title={label}
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center transition-opacity hover:opacity-70 focus:outline-none focus:ring-0 ${
+                    isActive ? 'text-white' : 'text-white/90'
+                  }`}
+                >
+                  <Icon className="w-[22px] h-[22px]" strokeWidth={2} />
+                </Link>
+              );
+            })}
+          </nav>
+          {/* Wallet status */}
+          <div className="flex items-center gap-2 ml-1 border-l border-white/10 pl-2">
+            {wallet ? (
+              <>
+                <div className="hidden sm:block text-right">
+                  <p className="text-[10px] text-white/50">Balance</p>
+                  <p className="text-xs font-semibold text-white">
+                    {parseFloat(wallet.balance ?? 0).toFixed(2)} XRP
+                  </p>
+                </div>
+                <div className="px-2 py-1 bg-white/10 rounded-lg text-[10px] font-mono text-white/90">
+                  {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                </div>
+                <button
+                  onClick={logout}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Disconnect"
+                >
+                  <LogOut className="w-4 h-4" strokeWidth={2} />
+                </button>
+              </>
+            ) : (
               <Link
-                key={path}
-                to={path}
-                title={label}
-                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-opacity hover:opacity-70 focus:outline-none focus:ring-0 ${
-                  isActive ? 'text-white' : 'text-white/90'
-                }`}
+                to="/wallet"
+                className="px-3 py-2 bg-white/15 hover:bg-white/25 rounded-xl text-xs font-medium text-white transition-colors"
               >
-                <Icon className="w-[22px] h-[22px]" strokeWidth={2} />
+                Connect Wallet
               </Link>
-            );
-          })}
-        </nav>
+            )}
+          </div>
+        </div>
 
-        {/* Mobile: icons only */}
+        {/* Mobile: icons only (no search, wallet at end) */}
         <nav className="md:hidden flex items-center gap-1">
           {navItems.map(({ path, label, icon: Icon }) => {
             const isActive = location.pathname === path;
@@ -87,6 +126,23 @@ export default function Layout({ children }) {
               </Link>
             );
           })}
+          {wallet ? (
+            <button
+              onClick={logout}
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-white/80"
+              title="Disconnect"
+            >
+              <LogOut className="w-[22px] h-[22px]" strokeWidth={2} />
+            </button>
+          ) : (
+            <Link
+              to="/wallet"
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-white/80"
+              title="Connect Wallet"
+            >
+              <CreditCard className="w-[22px] h-[22px]" strokeWidth={2} />
+            </Link>
+          )}
         </nav>
       </header>
 

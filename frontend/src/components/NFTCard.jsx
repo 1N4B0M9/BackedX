@@ -1,57 +1,54 @@
 import { Link } from 'react-router-dom';
-import { Shield, ShieldCheck, ShieldAlert, Zap } from 'lucide-react';
+import NFTVisual from './NFTVisual';
 
-const tierConfig = {
-  unverified: { icon: ShieldAlert, color: 'text-surface-500', bg: 'bg-surface-700', label: 'Unverified' },
-  basic: { icon: Shield, color: 'text-blue-400', bg: 'bg-blue-900/30', label: 'Basic' },
-  verified: { icon: ShieldCheck, color: 'text-green-400', bg: 'bg-green-900/30', label: 'Verified' },
-  premium: { icon: ShieldCheck, color: 'text-amber-400', bg: 'bg-amber-900/30', label: 'Premium' },
-};
+// Resolve image URL: handle ipfs:// links, local /uploads/ paths, and full URLs
+function resolveImageUrl(url) {
+  if (!url) return null;
+  if (url.startsWith('ipfs://')) {
+    const hash = url.replace('ipfs://', '');
+    return `https://gateway.pinata.cloud/ipfs/${hash}`;
+  }
+  if (url.startsWith('/uploads/')) {
+    // Local fallback — served from backend
+    return `http://localhost:3001${url}`;
+  }
+  return url;
+}
 
-export default function NFTCard({ nft, showBuy = false, showRelist = false }) {
-  const tier = tierConfig[nft.verification_tier] || tierConfig.unverified;
-  const TierIcon = tier.icon;
+export default function NFTCard({ nft }) {
   const isRoyalty = !!nft.royalty_pool_id || nft.asset_type === 'royalty';
   const displayValue = nft.last_sale_price_xrp > 0 ? nft.last_sale_price_xrp : nft.list_price_xrp;
+  const imageUrl = resolveImageUrl(nft.asset_image_url);
+  const hasImage = !!imageUrl;
 
   return (
     <Link
       to={`/nft/${nft.id}`}
-      className="group block bg-surface-900 border border-surface-800 rounded-2xl overflow-hidden hover:border-primary-600/50 transition-all hover:shadow-lg hover:shadow-primary-600/10"
+      className="group block bg-surface-900 border border-surface-800 rounded-2xl overflow-hidden hover:border-primary-600/50 transition-all duration-200 hover:shadow-lg hover:shadow-primary-600/10 hover:scale-[1.02]"
     >
-      {/* Image */}
-      <div className="aspect-square bg-gradient-to-br from-primary-900/50 to-surface-800 relative overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <Zap className="w-12 h-12 text-primary-500/50 mx-auto mb-2" />
-            <p className="text-sm font-semibold text-surface-400 capitalize">{nft.asset_type || 'Digital Asset'}</p>
-            {isRoyalty && nft.royalty_percentage && (
-              <p className="text-xs text-purple-400 mt-1 font-bold">{nft.royalty_percentage}% Royalty</p>
-            )}
-          </div>
-        </div>
-
-        {/* Verification Badge */}
-        <div className={`absolute top-3 right-3 flex items-center gap-1 ${tier.bg} px-2 py-1 rounded-full`}>
-          <TierIcon className={`w-3 h-3 ${tier.color}`} />
-          <span className={`text-[10px] font-medium ${tier.color}`}>{tier.label}</span>
-        </div>
+{/* Image or Generative Visual */}
+<div className="aspect-square relative overflow-hidden">
+  {hasImage ? (
+    <img src={imageUrl} alt={nft.asset_name} className="absolute inset-0 w-full h-full object-cover" />
+  ) : (
+    <NFTVisual nft={nft} size="card" />
+  )}
 
         {/* Status Badge */}
-        <div className="absolute top-3 left-3 flex items-center gap-1">
+        <div className="absolute top-3 left-3 flex items-center gap-1 z-20">
           <span
-            className={`text-[10px] font-medium px-2 py-1 rounded-full ${
+            className={`text-[10px] font-medium px-2 py-1 rounded-full backdrop-blur-sm ${
               nft.status === 'listed'
-                ? 'bg-green-900/40 text-green-400'
+                ? 'bg-green-900/60 text-green-400'
                 : nft.status === 'owned'
-                ? 'bg-blue-900/40 text-blue-400'
-                : 'bg-surface-700 text-surface-400'
+                ? 'bg-blue-900/60 text-blue-400'
+                : 'bg-surface-700/80 text-surface-400'
             }`}
           >
             {nft.status?.toUpperCase()}
           </span>
           {isRoyalty && (
-            <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-purple-900/40 text-purple-400">
+            <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-purple-900/60 backdrop-blur-sm text-purple-400">
               ROYALTY
             </span>
           )}
@@ -59,8 +56,10 @@ export default function NFTCard({ nft, showBuy = false, showRelist = false }) {
 
         {/* Sale count badge */}
         {nft.sale_count > 0 && (
-          <div className="absolute bottom-3 right-3 bg-surface-900/80 backdrop-blur px-2 py-1 rounded-full">
-            <span className="text-[10px] text-surface-300">{nft.sale_count} sale{nft.sale_count !== 1 ? 's' : ''}</span>
+          <div className="absolute bottom-3 right-3 bg-surface-900/80 backdrop-blur-sm px-2 py-1 rounded-full z-20">
+            <span className="text-[10px] text-surface-300">
+              {nft.sale_count} sale{nft.sale_count !== 1 ? 's' : ''}
+            </span>
           </div>
         )}
       </div>
@@ -71,7 +70,7 @@ export default function NFTCard({ nft, showBuy = false, showRelist = false }) {
           {nft.asset_name}
         </h3>
         <p className="text-xs text-surface-500 mt-1 truncate">
-          by {nft.company_name || 'Unknown'}
+          by {nft.creator_name || (nft.creator_address ? `${nft.creator_address.slice(0, 8)}...` : 'Unknown')}
           {nft.royalty_pool_name && (
             <span className="text-purple-400"> &middot; {nft.royalty_pool_name}</span>
           )}

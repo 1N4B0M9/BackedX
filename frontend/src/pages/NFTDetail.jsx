@@ -3,27 +3,29 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '../hooks/useWallet';
 import {
   ArrowLeft,
-  ShieldCheck,
   Coins,
-  ArrowRightLeft,
-  AlertCircle,
   RefreshCw,
-  Zap,
   TrendingUp,
   Tag,
   Repeat,
   DollarSign,
+  Settings2,
+  ExternalLink,
+  FileText,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import * as api from '../services/api';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { useToast } from '../components/Toast';
+import { SkeletonNFTDetail } from '../components/Skeleton';
 import StatusBadge from '../components/StatusBadge';
 import ExplorerLink from '../components/ExplorerLink';
+import NFTVisual from '../components/NFTVisual';
 
 export default function NFTDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { wallet } = useWallet();
+  const { toast } = useToast();
 
   const [nft, setNft] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -34,8 +36,6 @@ export default function NFTDetail() {
   const [relisting, setRelisting] = useState(false);
   const [relistPrice, setRelistPrice] = useState('');
   const [showRelistForm, setShowRelistForm] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     loadNFT();
@@ -65,14 +65,12 @@ export default function NFTDetail() {
       return;
     }
     setBuying(true);
-    setError('');
-    setSuccess('');
     try {
       const { data } = await api.purchaseNFT(id, wallet.address, wallet.seed);
-      setSuccess({ message: 'Purchase successful!', txHash: data.txHash });
+      toast({ type: 'success', title: 'Purchase Successful!', message: `TX: ${data.txHash?.slice(0, 12)}...` });
       loadNFT();
     } catch (err) {
-      setError(err.response?.data?.error || 'Purchase failed');
+      toast({ type: 'error', title: 'Purchase Failed', message: err.response?.data?.error || 'Purchase failed' });
     } finally {
       setBuying(false);
     }
@@ -80,25 +78,24 @@ export default function NFTDetail() {
 
   const handleRelist = async () => {
     if (!relistPrice || parseFloat(relistPrice) <= 0) {
-      setError('Please enter a valid price');
+      toast({ type: 'error', message: 'Please enter a valid price' });
       return;
     }
     setRelisting(true);
-    setError('');
-    setSuccess('');
     try {
-
-      const { data } = await api.redeemNFT(id, wallet.address, wallet.seed);
-      setSuccess({ message: `Redeemed! ${data.redemption.amountXrp} XRP released.`, txHash: data.redemption.burnTxHash });
+      const { data } = await api.relistNFT(id, wallet.address, wallet.seed, parseFloat(relistPrice));
+      toast({ type: 'success', title: 'NFT Relisted!', message: `Listed for ${relistPrice} XRP` });
+      setShowRelistForm(false);
+      setRelistPrice('');
       loadNFT();
     } catch (err) {
-      setError(err.response?.data?.error || 'Relist failed');
+      toast({ type: 'error', title: 'Relist Failed', message: err.response?.data?.error || 'Relist failed' });
     } finally {
       setRelisting(false);
     }
   };
 
-  if (loading) return <LoadingSpinner text="Loading NFT details..." />;
+  if (loading) return <SkeletonNFTDetail />;
   if (!nft) {
     return (
       <div className="text-center py-16">
@@ -115,6 +112,24 @@ export default function NFTDetail() {
   const canRelist = wallet && nft.status === 'owned' && isOwner;
   const currentValue = nft.last_sale_price_xrp > 0 ? nft.last_sale_price_xrp : nft.list_price_xrp;
   const isRoyaltyNFT = !!nft.royalty_pool_id;
+  const creatorLabel = nft.creator_name || (nft.creator_address ? `${nft.creator_address.slice(0, 10)}...${nft.creator_address.slice(-4)}` : 'Unknown');
+
+  // Resolve image URL
+  const resolveUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('ipfs://')) return `https://gateway.pinata.cloud/ipfs/${url.replace('ipfs://', '')}`;
+    if (url.startsWith('/uploads/')) return `http://localhost:3001${url}`;
+    return url;
+  };
+  const imageUrl = resolveUrl(nft.asset_image_url);
+  const hasImage = !!imageUrl;
+
+  // Parse properties
+  let nftProperties = {};
+  try {
+    nftProperties = nft.properties ? (typeof nft.properties === 'string' ? JSON.parse(nft.properties) : nft.properties) : {};
+  } catch { nftProperties = {}; }
+  const hasProperties = Object.keys(nftProperties).length > 0;
 
   // Format price history for chart
   const chartData = priceHistory
@@ -138,17 +153,15 @@ export default function NFTDetail() {
       <div className="grid lg:grid-cols-2 gap-8">
         {/* Left: Image / Visual */}
         <div className="bg-surface-900 border border-surface-800 rounded-2xl overflow-hidden">
-          <div className="aspect-square bg-gradient-to-br from-primary-900/40 to-surface-900 flex items-center justify-center relative">
-            <div className="text-center">
-              <Zap className="w-20 h-20 text-primary-500/30 mx-auto mb-4" />
-              <p className="text-xl font-bold text-surface-400">{nft.asset_type}</p>
-              <p className="text-sm text-surface-600 mt-1">
-                {isRoyaltyNFT ? `${nft.royalty_percentage}% Royalty NFT` : 'Digital Asset NFT'}
-              </p>
-            </div>
+                 <div className="aspect-square relative">
+            {hasImage ? (
+              <img src={imageUrl} alt={nft.asset_name} className="absolute inset-0 w-full h-full object-cover" />
+            ) : (
+              <NFTVisual nft={nft} size="detail" />
+            )}
 
             {/* Value Badge */}
-            <div className="absolute bottom-4 left-4 right-4 bg-surface-900/90 backdrop-blur rounded-xl p-4 flex items-center justify-between">
+            <div className="absolute bottom-4 left-4 right-4 bg-surface-900/90 backdrop-blur-md rounded-xl p-4 flex items-center justify-between z-20">
               <div>
                 <p className="text-[10px] text-surface-500 uppercase tracking-wider">
                   {nft.sale_count > 0 ? 'Market Value' : 'List Price'}
@@ -173,7 +186,6 @@ export default function NFTDetail() {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <StatusBadge status={nft.status} />
-              <StatusBadge status={nft.verification_tier || 'basic'} />
               {isRoyaltyNFT && (
                 <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-purple-900/40 text-purple-400">
                   ROYALTY
@@ -181,7 +193,7 @@ export default function NFTDetail() {
               )}
             </div>
             <h1 className="text-3xl font-bold">{nft.asset_name}</h1>
-            <p className="text-surface-400 mt-2">by {nft.company_name}</p>
+            <p className="text-surface-400 mt-2">by {creatorLabel}</p>
           </div>
 
           {/* Description */}
@@ -242,6 +254,54 @@ export default function NFTDetail() {
                 {isOwner ? 'You Own This NFT' : 'Current Owner'}
               </p>
               <ExplorerLink type="account" value={nft.owner_address} truncate={false} />
+            </div>
+          )}
+
+          {/* Game Properties */}
+          {hasProperties && (
+            <div className="bg-surface-900 border border-surface-800 rounded-xl p-4">
+              <p className="text-xs text-surface-500 uppercase tracking-wider mb-3 font-semibold flex items-center gap-1.5">
+                <Settings2 className="w-3.5 h-3.5" />
+                Game / App Properties
+              </p>
+              <div className="space-y-2">
+                {Object.entries(nftProperties).map(([key, value]) => (
+                  <div key={key} className="flex items-center justify-between bg-surface-800/60 rounded-lg px-3 py-2">
+                    <span className="text-sm text-surface-400 font-mono">{key}</span>
+                    <span className="text-sm font-medium text-white">{String(value)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Content / IPFS Link */}
+          {nft.asset_image_url && (
+            <div className="bg-surface-900 border border-surface-800 rounded-xl p-4">
+              <p className="text-xs text-surface-500 uppercase tracking-wider mb-2 font-semibold flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" />
+                NFT Content
+              </p>
+              <a
+                href={imageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-primary-400 hover:text-primary-300 transition-colors flex items-center gap-1.5 break-all"
+              >
+                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                {nft.asset_image_url.startsWith('ipfs://') ? nft.asset_image_url : 'View Content File'}
+              </a>
+              {nft.metadata_uri && (
+                <a
+                  href={resolveUrl(nft.metadata_uri)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-surface-500 hover:text-surface-300 transition-colors flex items-center gap-1.5 mt-2 break-all"
+                >
+                  <ExternalLink className="w-3 h-3 shrink-0" />
+                  Metadata: {nft.metadata_uri.startsWith('ipfs://') ? nft.metadata_uri : 'View Metadata'}
+                </a>
+              )}
             </div>
           )}
 
@@ -327,23 +387,6 @@ export default function NFTDetail() {
             )}
           </div>
 
-          {error && (
-            <div className="p-3 bg-red-900/20 border border-red-800 rounded-xl text-sm text-red-400 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="p-3 bg-green-900/20 border border-green-800 rounded-xl text-sm text-green-400">
-              <p>{success.message || success}</p>
-              {success.txHash && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-green-500/70">TX:</span>
-                  <ExplorerLink type="tx" value={success.txHash} />
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 

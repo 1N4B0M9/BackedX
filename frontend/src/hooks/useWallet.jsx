@@ -8,7 +8,7 @@ export function WalletProvider({ children }) {
     const saved = localStorage.getItem('dat_wallet');
     return saved ? JSON.parse(saved) : null;
   });
-  const [company, setCompany] = useState(() => {
+  const [company, setCompanyState] = useState(() => {
     const saved = localStorage.getItem('dat_company');
     return saved ? JSON.parse(saved) : null;
   });
@@ -20,11 +20,11 @@ export function WalletProvider({ children }) {
     else localStorage.removeItem('dat_wallet');
   };
 
-  const saveCompany = (c) => {
-    setCompany(c);
+  const setCompany = useCallback((c) => {
+    setCompanyState(c);
     if (c) localStorage.setItem('dat_company', JSON.stringify(c));
     else localStorage.removeItem('dat_company');
-  };
+  }, []);
 
   const createNewWallet = useCallback(async (displayName) => {
     setLoading(true);
@@ -42,7 +42,6 @@ export function WalletProvider({ children }) {
     try {
       const { data } = await api.loginWithSeed(seed);
       saveWallet({ address: data.address, seed, balance: data.balance });
-      if (data.company) saveCompany(data.company);
       return data;
     } finally {
       setLoading(false);
@@ -61,7 +60,7 @@ export function WalletProvider({ children }) {
 
   const logout = useCallback(() => {
     saveWallet(null);
-    saveCompany(null);
+    setCompany(null);
   }, []);
 
   return (
@@ -69,12 +68,12 @@ export function WalletProvider({ children }) {
       value={{
         wallet,
         company,
+        setCompany,
         loading,
         createNewWallet,
         loginWithSeed,
         refreshBalance,
         logout,
-        setCompany: saveCompany,
       }}
     >
       {children}

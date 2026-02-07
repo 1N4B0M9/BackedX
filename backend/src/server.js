@@ -1,15 +1,17 @@
+import './env.js'; // load .env before anything else
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-import companyRoutes from './routes/company.js';
+import creatorRoutes from './routes/creator.js';
 import marketplaceRoutes from './routes/marketplace.js';
 import holderRoutes from './routes/holder.js';
 import walletRoutes from './routes/wallet.js';
 import royaltyRoutes from './routes/royalty.js';
 
-dotenv.config();
-
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -20,8 +22,11 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 
+// Serve uploaded files statically (fallback when Pinata is not configured)
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+
 // Routes
-app.use('/api/company', companyRoutes);
+app.use('/api/creator', creatorRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/holder', holderRoutes);
 app.use('/api/wallet', walletRoutes);
@@ -36,8 +41,8 @@ app.get('/api/health', (req, res) => {
 app.get('/api/stats', async (req, res) => {
   try {
     const { default: pool } = await import('./db/pool.js');
-    const [companies, nfts, transactions, royaltyPools] = await Promise.all([
-      pool.query('SELECT COUNT(*) as cnt FROM companies'),
+    const [creators, nfts, transactions, royaltyPools] = await Promise.all([
+      pool.query('SELECT COUNT(DISTINCT creator_address) as cnt FROM nfts'),
       pool.query('SELECT COUNT(*) as cnt FROM nfts'),
       pool.query('SELECT COUNT(*) as cnt FROM transactions'),
       pool.query('SELECT COUNT(*) as cnt FROM royalty_pools'),
@@ -48,7 +53,7 @@ app.get('/api/stats', async (req, res) => {
     );
 
     res.json({
-      companies: parseInt(companies.rows[0]?.cnt || 0),
+      creators: parseInt(creators.rows[0]?.cnt || 0),
       nfts: parseInt(nfts.rows[0]?.cnt || 0),
       transactions: parseInt(transactions.rows[0]?.cnt || 0),
       royaltyPools: parseInt(royaltyPools.rows[0]?.cnt || 0),
