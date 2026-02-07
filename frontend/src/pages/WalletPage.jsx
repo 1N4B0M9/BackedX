@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import { Wallet, Plus, KeyRound, Copy, Check, RefreshCw } from 'lucide-react';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ExplorerLink from '../components/ExplorerLink';
+import { BGPattern } from '../components/ui/bg-pattern';
 
 export default function WalletPage() {
   const { wallet, loading, createNewWallet, loginWithSeed, refreshBalance, logout } = useWallet();
@@ -60,9 +61,19 @@ export default function WalletPage() {
   // Connected state
   if (wallet) {
     return (
-      <div className="fixed inset-0 w-screen h-screen bg-black z-40">
+      <div className="fixed inset-0 w-screen h-screen z-40">
+        <div className="absolute inset-0 bg-black" aria-hidden />
+        <BGPattern variant="dots" mask="none" size={28} fill="rgba(255,255,255,0.12)" />
+        {/* Fade toward center: black in center (hides pattern), transparent at edges (pattern visible) */}
+        <div
+          className="absolute inset-0 pointer-events-none z-[1]"
+          style={{
+            background: 'radial-gradient(circle at center, black 30%, transparent 58%)',
+          }}
+          aria-hidden
+        />
         {/* Centered card */}
-        <div className="absolute inset-0 flex items-center justify-center px-4">
+        <div className="absolute inset-0 z-10 flex items-center justify-center px-4">
           <div className="w-full max-w-lg animate-fade-in">
             <div className="bg-black border border-white/10 rounded-3xl p-8 shadow-[0_0_80px_rgba(255,173,184,0.06)]">
               <div className="flex items-center gap-3 mb-6">
@@ -146,9 +157,19 @@ export default function WalletPage() {
 
   // Not connected
   return (
-    <div className="fixed inset-0 w-screen h-screen bg-black z-40">
+    <div className="fixed inset-0 w-screen h-screen z-40">
+      <div className="absolute inset-0 bg-black" aria-hidden />
+      <BGPattern variant="dots" mask="none" size={28} fill="rgba(255,255,255,0.12)" />
+      {/* Fade toward center: black in center, transparent at edges */}
+      <div
+        className="absolute inset-0 pointer-events-none z-[1]"
+        style={{
+          background: 'radial-gradient(circle at center, black 30%, transparent 58%)',
+        }}
+        aria-hidden
+      />
       {/* Centered content */}
-      <div className="absolute inset-0 flex items-center justify-center px-4">
+      <div className="absolute inset-0 z-10 flex items-center justify-center px-4">
         <div className="w-full max-w-md animate-fade-in">
           {/* Header */}
           <div className="text-center mb-8">
