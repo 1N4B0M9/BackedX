@@ -1,9 +1,6 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Zap, Shield, ArrowRightLeft, TrendingUp, Plus, ShoppingBag, Briefcase } from 'lucide-react';
-import * as api from '../services/api';
-
-const TOTAL_SLIDES = 8;
+import { Zap, Shield, TrendingUp, Briefcase } from 'lucide-react';
 
 const HERO_IMAGES = [
   'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=600&fit=crop',
@@ -24,31 +21,151 @@ const HERO_IMAGES = [
   'https://images.unsplash.com/photo-1622547748225-3fc4abd2cca0?w=400&h=500&fit=crop',
 ];
 
-/* Subtle different backgrounds for blank sections (2–8) */
-const BLANK_SECTION_STYLES = [
-  'bg-gradient-to-b from-surface-950 to-surface-900',
-  'bg-gradient-to-b from-surface-900 to-surface-950',
-  'bg-gradient-to-br from-surface-950 via-primary-900/20 to-surface-900',
-  'bg-gradient-to-bl from-surface-950 via-surface-900 to-surface-800/30',
-  'bg-gradient-to-b from-surface-900 via-surface-800/40 to-surface-950',
-  'bg-gradient-to-br from-surface-950 to-surface-800/50',
-  'bg-gradient-to-b from-surface-950 via-surface-900 to-surface-950',
+const IMAGE_POSITIONS = [
+  { top: '2%', left: '1%', width: 140, height: 200 },
+  { top: '1%', left: '18%', width: 180, height: 140 },
+  { top: '4%', left: '42%', width: 160, height: 200 },
+  { top: '2%', right: '18%', width: 170, height: 160 },
+  { top: '1%', right: '2%', width: 150, height: 190 },
+  { top: '28%', left: '0%', width: 160, height: 180 },
+  { top: '35%', left: '25%', width: 190, height: 140 },
+  { top: '22%', right: '28%', width: 170, height: 200 },
+  { top: '30%', right: '0%', width: 150, height: 160 },
+  { bottom: '32%', left: '2%', width: 180, height: 170 },
+  { bottom: '28%', left: '22%', width: 160, height: 200 },
+  { bottom: '35%', left: 'calc(50% - 70px)', width: 140, height: 180 },
+  { bottom: '30%', right: '20%', width: 170, height: 160 },
+  { bottom: '28%', right: '0%', width: 180, height: 190 },
+  { bottom: '2%', left: '8%', width: 160, height: 200 },
+  { bottom: '4%', right: '10%', width: 200, height: 170 },
 ];
+
+/* Slide 0 = hero text, 1-4 = features, 5 = CTA */
+const SLIDES = [
+  {
+    isHero: true,
+    dotColor: 'bg-white',
+  },
+  {
+    icon: Shield,
+    title: 'On-Chain Value',
+    desc: 'Every price change, every transaction, permanently recorded on the XRP Ledger. Full transparency with an immutable history you can trust.',
+    accentColor: 'rgb(96, 165, 250)',
+    iconGradient: 'from-blue-500 to-blue-700',
+    dotColor: 'bg-blue-400',
+  },
+  {
+    icon: Zap,
+    title: 'XRPL Speed',
+    desc: 'Transactions settle in 3-5 seconds. No waiting, no congestion, no excessive gas fees. Just instant, reliable transfers on the XRP Ledger.',
+    accentColor: 'rgb(251, 191, 36)',
+    iconGradient: 'from-amber-500 to-amber-700',
+    dotColor: 'bg-amber-400',
+  },
+  {
+    icon: TrendingUp,
+    title: 'Royalty Pools',
+    desc: 'Creators set up royalty pools and distribute income directly to NFT holders. Transparent, on-chain revenue sharing with no middlemen.',
+    accentColor: 'rgb(74, 222, 128)',
+    iconGradient: 'from-green-500 to-green-700',
+    dotColor: 'bg-green-400',
+  },
+  {
+    icon: Briefcase,
+    title: 'Free Market',
+    desc: 'Buy at market price, relist at whatever price you choose. A truly open marketplace where supply and demand set the value.',
+    accentColor: 'rgb(192, 132, 252)',
+    iconGradient: 'from-purple-500 to-purple-700',
+    dotColor: 'bg-purple-400',
+  },
+  {
+    isCta: true,
+    dotColor: 'bg-primary-400',
+  },
+];
+
+const TRANSITION_MS = 700;
 
 export default function Home() {
   const gridRef = useRef(null);
   const mouseRef = useRef({ x: 0, y: 0 });
   const currentRef = useRef({ x: 0, y: 0 });
   const rafRef = useRef(null);
-  const sectionRefs = useRef([]);
-  const activeIndexRef = useRef(0);
-  const [stats, setStats] = useState(null);
+  const containerRef = useRef(null);
 
+  const [active, setActive] = useState(0);
+  const [direction, setDirection] = useState(0); // -1 = up, 0 = idle, 1 = down
+  const lockRef = useRef(false);
+  const total = SLIDES.length;
+
+  // ── Go to a specific slide ──
+  const goTo = useCallback((idx) => {
+    const clamped = Math.max(0, Math.min(idx, total - 1));
+    if (clamped === active || lockRef.current) return;
+    lockRef.current = true;
+    setDirection(clamped > active ? 1 : -1);
+    setActive(clamped);
+    setTimeout(() => {
+      lockRef.current = false;
+      setDirection(0);
+    }, TRANSITION_MS);
+  }, [active, total]);
+
+  // ── Wheel handler: one slide per scroll gesture ──
   useEffect(() => {
-    api.getStats().then((res) => setStats(res.data)).catch(() => {});
-  }, []);
+    const el = containerRef.current;
+    if (!el) return;
 
-  // Parallax for hero
+    const onWheel = (e) => {
+      e.preventDefault();
+      if (lockRef.current) return;
+      if (Math.abs(e.deltaY) < 5) return; // ignore tiny trackpad noise
+      if (e.deltaY > 0) goTo(active + 1);
+      else goTo(active - 1);
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [active, goTo]);
+
+  // ── Keyboard: arrow up/down ──
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        goTo(active + 1);
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        goTo(active - 1);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active, goTo]);
+
+  // ── Touch swipe support ──
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    let startY = 0;
+
+    const onTouchStart = (e) => { startY = e.touches[0].clientY; };
+    const onTouchEnd = (e) => {
+      const dy = startY - e.changedTouches[0].clientY;
+      if (Math.abs(dy) < 40) return; // ignore small taps
+      if (dy > 0) goTo(active + 1);
+      else goTo(active - 1);
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [active, goTo]);
+
+  // ── Parallax for background images ──
   useEffect(() => {
     const handleMouseMove = (e) => {
       mouseRef.current = {
@@ -84,179 +201,142 @@ export default function Home() {
     };
   }, []);
 
-  const scrollToSlide = useCallback((index) => {
-    const clamped = Math.max(0, Math.min(index, TOTAL_SLIDES - 1));
-    const el = sectionRefs.current[clamped];
-    if (el) {
-      activeIndexRef.current = clamped;
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+  // Prevent body scroll while on homepage
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
   }, []);
 
-  // Keyboard: Arrow Up/Down, Page Up/Down (use outer scroll)
-  useEffect(() => {
-    const handleScroll = () => {
-      const sections = sectionRefs.current.filter(Boolean);
-      if (!sections.length) return;
-      const viewportMid = window.scrollY + window.innerHeight / 2;
-      let current = 0;
-      for (let i = 0; i < sections.length; i++) {
-        const top = sections[i].getBoundingClientRect().top + window.scrollY;
-        const bottom = top + sections[i].offsetHeight;
-        if (viewportMid >= top && viewportMid < bottom) {
-          current = i;
-          break;
-        }
-        if (viewportMid < top) break;
-        current = i;
-      }
-      activeIndexRef.current = current;
-    };
-
-    const handleKeyDown = (e) => {
-      switch (e.key) {
-        case 'ArrowDown':
-        case 'PageDown':
-          e.preventDefault();
-          scrollToSlide(activeIndexRef.current + 1);
-          break;
-        case 'ArrowUp':
-        case 'PageUp':
-          e.preventDefault();
-          scrollToSlide(activeIndexRef.current - 1);
-          break;
-        default:
-          break;
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [scrollToSlide]);
-
-  const setSectionRef = (i, el) => {
-    sectionRefs.current[i] = el;
-  };
-
   return (
-    <div className="relative -my-8 w-screen max-w-none ml-[calc(-50vw+50%)] mr-[calc(-50vw+50%)] overflow-x-hidden">
-      {/* Slide 1: Hero */}
-      <section
-        ref={(el) => setSectionRef(0, el)}
-        className="home-slide shrink-0"
-        aria-label="Hero"
+    <div
+      ref={containerRef}
+      className="fixed inset-0 w-screen h-screen bg-black z-40"
+    >
+      {/* Background: parallax image grid (always visible) */}
+      <div
+        ref={gridRef}
+        className="absolute inset-0 pointer-events-none"
+        style={{ opacity: 0.35 }}
       >
-        <div className="home-hero overflow-x-hidden h-full min-h-full">
-          <div ref={gridRef} className="image-grid" aria-hidden="true">
-            {HERO_IMAGES.map((src, i) => (
-              <div key={i} className="grid-item">
-                <img src={src} alt="" loading="lazy" />
-              </div>
-            ))}
+        {HERO_IMAGES.map((src, i) => (
+          <div key={i} className="grid-item" style={{
+            position: 'absolute',
+            borderRadius: 16,
+            overflow: 'hidden',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 0 20px rgba(255,255,255,0.02)',
+            ...IMAGE_POSITIONS[i],
+          }}>
+            <img src={src} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.7 }} />
           </div>
-          <div className="hero-content">
-            <h1 className="hero-title">
-              Transparent
-              <br />
-              Decentralized
-              <br />
-              Immutable
-            </h1>
-            <p className="hero-subtitle">
-              The next generation of distributed ledger infrastructure.
-            </p>
-            <Link to="/marketplace" className="cta-button">
-              Shop Now
-            </Link>
+        ))}
+      </div>
+
+      {/* ── Slide content layers ── */}
+      {SLIDES.map((slide, i) => {
+        const Icon = slide.icon;
+        const isActive = i === active;
+
+        // Determine enter/exit animation
+        let opacity = 0;
+        let transform = 'translateY(40px)';
+
+        if (isActive) {
+          opacity = 1;
+          transform = 'translateY(0)';
+        }
+
+        return (
+          <div
+            key={i}
+            className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"
+            style={{
+              opacity,
+              transform,
+              transition: `opacity ${TRANSITION_MS}ms ease, transform ${TRANSITION_MS}ms ease`,
+              pointerEvents: isActive ? 'auto' : 'none',
+            }}
+          >
+            {slide.isHero ? (
+              <>
+                <h1 className="text-white font-light tracking-[-3px] leading-[1.1] mb-8"
+                    style={{ fontSize: 'clamp(2.5rem, 10vw, 96px)' }}>
+                  Transparent
+                  <br />
+                  Decentralized
+                  <br />
+                  Immutable
+                </h1>
+                <p className="text-xl text-white/60 mb-12 font-light">
+                  The next generation of distributed ledger infrastructure.
+                </p>
+                <Link
+                  to="/marketplace"
+                  className="relative overflow-hidden bg-gradient-to-br from-white/95 to-gray-200/95 text-black px-12 py-4 rounded-[28px] text-base font-semibold border border-white/30 backdrop-blur-lg tracking-wide hover:scale-105 hover:shadow-[0_10px_40px_rgba(255,255,255,0.15)] transition-all"
+                >
+                  Shop Now
+                </Link>
+              </>
+            ) : slide.isCta ? (
+              <>
+                <h2 className="text-4xl md:text-6xl font-bold mb-4 text-white tracking-tight">
+                  Ready to start?
+                </h2>
+                <p className="text-lg text-surface-400 mb-12 max-w-lg font-light">
+                  Create, collect, and trade digital assets on the XRP Ledger.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-4">
+                  <Link to="/dashboard" className="px-8 py-3 bg-primary-600 hover:bg-primary-500 rounded-xl font-semibold transition-all text-white">
+                    Start Creating
+                  </Link>
+                  <Link to="/marketplace" className="px-8 py-3 bg-surface-800 hover:bg-surface-700 border border-surface-700 rounded-xl font-semibold transition-all text-white">
+                    Browse Marketplace
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${slide.iconGradient} flex items-center justify-center mb-8 shadow-lg`}>
+                  <Icon className="w-10 h-10 text-white" />
+                </div>
+                <h2
+                  className="text-5xl md:text-7xl font-bold mb-6 tracking-tight"
+                  style={{ color: slide.accentColor }}
+                >
+                  {slide.title}
+                </h2>
+                <p className="text-lg md:text-xl text-surface-400 max-w-2xl leading-relaxed font-light">
+                  {slide.desc}
+                </p>
+              </>
+            )}
           </div>
+        );
+      })}
+
+      {/* Progress dots (right side) */}
+      <div className="absolute right-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-3 z-50">
+        {SLIDES.map((slide, i) => (
+          <button
+            key={i}
+            onClick={() => goTo(i)}
+            aria-label={`Go to slide ${i + 1}`}
+            className={`rounded-full transition-all duration-300 ${
+              i === active
+                ? `w-2.5 h-8 ${slide.dotColor}`
+                : 'w-2.5 h-2.5 bg-white/20 hover:bg-white/40'
+            }`}
+          />
+        ))}
+      </div>
+
+      {/* Scroll hint on first slide */}
+      {active === 0 && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/40 animate-pulse z-50">
+          <span className="text-xs uppercase tracking-widest">Scroll</span>
+          <div className="w-px h-8 bg-white/20" />
         </div>
-      </section>
-
-      {/* Slide 2: Stats + How It Works + Features (from main) */}
-      <section
-        ref={(el) => setSectionRef(1, el)}
-        className={`home-slide shrink-0 overflow-y-auto ${BLANK_SECTION_STYLES[0] || 'bg-surface-950'}`}
-        aria-label="How it works"
-      >
-        <div className="max-w-6xl mx-auto px-6 py-16 space-y-16">
-          {stats && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[
-                { label: 'Creators', value: stats.creators, color: 'text-blue-400' },
-                { label: 'NFTs Minted', value: stats.nfts, color: 'text-purple-400' },
-                { label: 'Transactions', value: stats.transactions, color: 'text-green-400' },
-                { label: 'Trade Volume', value: `${stats.totalVolumeXrp?.toFixed(0) || 0} XRP`, color: 'text-amber-400' },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="bg-surface-900 border border-surface-800 rounded-2xl p-6 text-center">
-                  <p className={`text-3xl font-bold ${color}`}>{value}</p>
-                  <p className="text-xs text-surface-500 mt-1 uppercase tracking-wider">{label}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div>
-            <h2 className="text-2xl font-bold text-center mb-10 text-white">How It Works</h2>
-            <div className="grid md:grid-cols-3 gap-6">
-              {[
-                { icon: Plus, title: 'Create & Mint', desc: 'Connect your wallet and tokenize any digital asset as an NFT on XRPL. Set your price and list on the marketplace.', color: 'from-blue-600 to-blue-800' },
-                { icon: ShoppingBag, title: 'Buy & Sell', desc: 'Browse the marketplace and buy digital asset NFTs. XRP goes directly to the seller. Relist at any price.', color: 'from-purple-600 to-purple-800' },
-                { icon: ArrowRightLeft, title: 'Earn Royalties', desc: 'Create royalty pools and distribute income to NFT holders. Transparent, on-chain revenue sharing.', color: 'from-green-600 to-green-800' },
-              ].map(({ icon: Icon, title, desc, color }) => (
-                <div key={title} className="bg-surface-900 border border-surface-800 rounded-2xl p-8 text-center hover:border-primary-700/50 transition-colors">
-                  <div className={`w-14 h-14 mx-auto rounded-xl bg-gradient-to-br ${color} flex items-center justify-center mb-5`}>
-                    <Icon className="w-7 h-7 text-white" />
-                  </div>
-                  <h3 className="text-lg font-semibold mb-2 text-white">{title}</h3>
-                  <p className="text-sm text-surface-400 leading-relaxed">{desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { icon: Shield, label: 'On-Chain Value', desc: 'Price history stored on XRPL' },
-              { icon: Zap, label: 'XRPL Speed', desc: '3-5 second settlement times' },
-              { icon: TrendingUp, label: 'Royalty Pools', desc: 'Earn income from creator royalties' },
-              { icon: Briefcase, label: 'Free Market', desc: 'Relist at any price you choose' },
-            ].map(({ icon: Icon, label, desc }) => (
-              <div key={label} className="flex items-start gap-3 bg-surface-900/50 border border-surface-800/50 rounded-xl p-5">
-                <Icon className="w-5 h-5 text-primary-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-semibold text-white">{label}</p>
-                  <p className="text-xs text-surface-500 mt-0.5">{desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link to="/dashboard" className="px-8 py-3 bg-primary-600 hover:bg-primary-500 rounded-xl font-semibold transition-all">
-              Start Creating
-            </Link>
-            <Link to="/marketplace" className="px-8 py-3 bg-surface-800 hover:bg-surface-700 border border-surface-700 rounded-xl font-semibold transition-all">
-              Browse Marketplace
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Slides 3–8: Blank sections */}
-      {Array.from({ length: TOTAL_SLIDES - 2 }, (_, i) => (
-        <section
-          key={i}
-          ref={(el) => setSectionRef(i + 2, el)}
-          className={`home-slide shrink-0 ${BLANK_SECTION_STYLES[i + 1] || 'bg-surface-950'}`}
-          aria-label={`Section ${i + 3}`}
-        >
-          <div className="h-full flex items-center justify-center px-6" />
-        </section>
-      ))}
+      )}
     </div>
   );
 }

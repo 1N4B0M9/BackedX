@@ -1,6 +1,8 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useWallet } from '../hooks/useWallet';
+
+const isHome = (path) => path === '/';
 import {
   Home,
   Plus,
@@ -156,10 +158,12 @@ export default function Layout({ children }) {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-surface-800 py-6 text-center text-surface-600 text-xs">
-        <p>Digital Asset Tartan &mdash; Built on XRPL Testnet &mdash; Hackathon 2026</p>
-      </footer>
+      {/* Footer (hidden on homepage) */}
+      {!isHome(location.pathname) && (
+        <footer className="border-t border-surface-800 py-6 text-center text-surface-600 text-xs">
+          <p>Digital Asset Tartan &mdash; Built on XRPL Testnet &mdash; Hackathon 2026</p>
+        </footer>
+      )}
     </div>
   );
 }

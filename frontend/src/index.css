@@ -19,21 +19,21 @@
   --color-xrp: #23292f;
   --color-xrp-blue: #346aa9;
 
-  --color-surface-50: #f8fafc;
-  --color-surface-100: #f1f5f9;
-  --color-surface-200: #e2e8f0;
-  --color-surface-300: #cbd5e1;
-  --color-surface-400: #94a3b8;
-  --color-surface-500: #64748b;
-  --color-surface-600: #475569;
-  --color-surface-700: #334155;
-  --color-surface-800: #1e293b;
-  --color-surface-900: #0f172a;
-  --color-surface-950: #020617;
+  --color-surface-50: #fafafa;
+  --color-surface-100: #f5f5f5;
+  --color-surface-200: #e5e5e5;
+  --color-surface-300: #d4d4d4;
+  --color-surface-400: #a3a3a3;
+  --color-surface-500: #737373;
+  --color-surface-600: #525252;
+  --color-surface-700: #404040;
+  --color-surface-800: #262626;
+  --color-surface-900: #171717;
+  --color-surface-950: #0a0a0a;
 }
 
 html {
-  overflow-x: hidden;
+  overflow-x: clip;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE / old Edge */
 }
@@ -47,7 +47,7 @@ body {
   background: var(--color-surface-950);
   color: #f1f5f9;
   min-height: 100vh;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* Animations */

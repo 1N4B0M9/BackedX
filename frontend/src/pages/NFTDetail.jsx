@@ -404,7 +404,7 @@ export default function NFTDetail() {
                 <XAxis dataKey="date" stroke="#666" fontSize={12} />
                 <YAxis stroke="#666" fontSize={12} tickFormatter={(v) => `${v} XRP`} />
                 <Tooltip
-                  contentStyle={{ background: '#1a1a2e', border: '1px solid #333', borderRadius: '8px' }}
+                  contentStyle={{ background: '#0a0a0a', border: '1px solid #333', borderRadius: '8px' }}
                   labelStyle={{ color: '#999' }}
                   formatter={(value) => [`${value} XRP`, 'Sale Price']}
                 />

@@ -197,6 +197,32 @@ export default function Dashboard() {
   }
 };
 
+  const handleCreateRoyaltyPool = async () => {
+    if (!royaltyForm.name.trim()) {
+      toast({ type: 'error', message: 'Pool name is required' });
+      return;
+    }
+    setCreatingPool(true);
+    try {
+      const { data } = await api.createRoyaltyPool({
+        walletAddress: wallet.address,
+        name: royaltyForm.name,
+        description: royaltyForm.description,
+        totalNfts: parseInt(royaltyForm.totalNfts),
+        royaltyPerNft: parseFloat(royaltyForm.royaltyPerNft),
+        listPriceXrp: parseFloat(royaltyForm.listPriceXrp),
+      });
+      toast({ type: 'success', title: 'Royalty Pool Created!', message: data.message });
+      setRoyaltyForm({ name: '', description: '', totalNfts: '10', royaltyPerNft: '1', listPriceXrp: '10' });
+      loadCreatorData();
+      refreshBalance();
+    } catch (err) {
+      toast({ type: 'error', title: 'Pool Creation Failed', message: err.response?.data?.error || 'Failed to create royalty pool' });
+    } finally {
+      setCreatingPool(false);
+    }
+  };
+
   const handleDistribute = async () => {
     if (!distributePoolId || !distributeAmount) {
       toast({ type: 'error', message: 'Select a pool and enter an amount' });
