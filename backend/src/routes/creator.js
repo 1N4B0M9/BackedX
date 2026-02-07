@@ -3,6 +3,7 @@ import multer from 'multer';
 import pool from '../db/pool.js';
 import * as xrplService from '../services/xrpl.js';
 import * as ipfsService from '../services/ipfs.js';
+import { syncNFT } from '../services/sync.js';
 
 const router = Router();
 
@@ -88,14 +89,20 @@ router.post('/mint', upload.single('file'), async (req, res) => {
       const mintResult = await xrplService.mintNFT(userSeed, metadataUri);
 
       // 3. Create escrow if backing amount is specified
+      //    Non-fatal: if escrow TX fails on XRPL, we still save the NFT with
+      //    its intended backing value so the UI always shows the floor price.
       let escrowResult = null;
       if (backing > 0 && mintResult.tokenId) {
-        // Escrow XRP to the creator's own address (self-escrow as collateral)
-        escrowResult = await xrplService.createEscrow(
-          userSeed,
-          backing,
-          walletAddress // destination is self — funds locked as backing
-        );
+        try {
+          escrowResult = await xrplService.createEscrow(
+            userSeed,
+            backing,
+            walletAddress // destination is self — funds locked as backing
+          );
+        } catch (escrowErr) {
+          console.warn(`Escrow creation failed for token ${mintResult.tokenId} (${backing} XRP):`, escrowErr.message);
+          // Continue — NFT is still minted with its backing_xrp value recorded
+        }
       }
 
       // 4. Create sell offer
@@ -150,6 +157,13 @@ router.post('/mint', upload.single('file'), async (req, res) => {
           `INSERT INTO transactions (nft_id, tx_type, from_address, amount_xrp, tx_hash, status)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [nftResult.rows[0].id, 'escrow_create', walletAddress, backing, escrowResult.txHash, 'confirmed']
+        );
+      }
+
+      // 8. Sync on-chain state back to DB (verifies escrow, sell offers, ownership)
+      if (mintResult.tokenId) {
+        syncNFT(mintResult.tokenId).catch((err) =>
+          console.warn(`[Mint] Post-mint sync failed for ${mintResult.tokenId}:`, err.message)
         );
       }
 

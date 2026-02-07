@@ -277,12 +277,34 @@ export async function burnNFT(ownerSeed, tokenId) {
 
 export async function getAccountNFTs(address) {
   const c = await getClient();
-  const response = await c.request({
-    command: 'account_nfts',
-    account: address,
-    ledger_index: 'validated',
-  });
-  return response.result.account_nfts || [];
+  try {
+    const response = await c.request({
+      command: 'account_nfts',
+      account: address,
+      ledger_index: 'validated',
+    });
+    return response.result.account_nfts || [];
+  } catch (err) {
+    if (err.data?.error === 'actNotFound') return [];
+    throw err;
+  }
+}
+
+// ─── Account Escrow Objects ──────────────────────────────────────
+export async function getAccountEscrows(address) {
+  const c = await getClient();
+  try {
+    const response = await c.request({
+      command: 'account_objects',
+      account: address,
+      type: 'escrow',
+      ledger_index: 'validated',
+    });
+    return response.result.account_objects || [];
+  } catch (err) {
+    if (err.data?.error === 'actNotFound') return [];
+    throw err;
+  }
 }
 
 export async function getSellOffers(tokenId) {

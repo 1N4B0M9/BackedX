@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../db/pool.js';
 import * as xrplService from '../services/xrpl.js';
+import { syncNFT } from '../services/sync.js';
 
 const router = Router();
 
@@ -207,9 +208,9 @@ router.post('/:id/buy', async (req, res) => {
       );
     }
 
-    // Update NFT ownership, price, and sale count
+    // Record the sale in local DB (for transaction history)
     await pool.query(
-      `UPDATE nfts SET status = 'owned', owner_address = $1, last_sale_price_xrp = $2,
+      `UPDATE nfts SET owner_address = $1, last_sale_price_xrp = $2,
        sale_count = $3, updated_at = datetime('now') WHERE id = $4`,
       [buyerWalletAddress, nft.list_price_xrp, saleNumber, nftId]
     );
@@ -228,6 +229,13 @@ router.post('/:id/buy', async (req, res) => {
        ON CONFLICT (wallet_address) DO NOTHING`,
       [buyerWalletAddress, buyerWalletSeed, `User_${buyerWalletAddress.slice(-6)}`]
     );
+
+    // Sync on-chain state — this sets status and list_price from blockchain truth
+    if (nft.token_id) {
+      syncNFT(nft.token_id).catch((err) =>
+        console.warn(`[Buy] Post-purchase sync failed:`, err.message)
+      );
+    }
 
     res.json({
       message: 'NFT purchased successfully',
@@ -283,18 +291,19 @@ router.post('/:id/relist', async (req, res) => {
       );
     }
 
-    // Update NFT status and price
-    await pool.query(
-      `UPDATE nfts SET status = 'listed', list_price_xrp = $1, updated_at = datetime('now') WHERE id = $2`,
-      [listPrice, nftId]
-    );
-
     // Record relist transaction
     await pool.query(
       `INSERT INTO transactions (nft_id, tx_type, from_address, amount_xrp, tx_hash, status)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [nftId, 'relist', ownerWalletAddress, listPrice, sellOffer?.txHash || null, 'confirmed']
     );
+
+    // Sync on-chain state — this picks up the new sell offer and sets status/price from chain
+    if (nft.token_id) {
+      syncNFT(nft.token_id).catch((err) =>
+        console.warn(`[Relist] Post-relist sync failed:`, err.message)
+      );
+    }
 
     res.json({
       message: 'NFT relisted successfully',

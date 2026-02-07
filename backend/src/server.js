@@ -10,6 +10,8 @@ import marketplaceRoutes from './routes/marketplace.js';
 import holderRoutes from './routes/holder.js';
 import walletRoutes from './routes/wallet.js';
 import royaltyRoutes from './routes/royalty.js';
+import syncRoutes from './routes/sync.js';
+import { startBackgroundSync } from './services/sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -31,6 +33,7 @@ app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/holder', holderRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/royalty', royaltyRoutes);
+app.use('/api/sync', syncRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -72,4 +75,7 @@ app.listen(PORT, () => {
   ║   XRPL: Testnet                              ║
   ╚══════════════════════════════════════════════╝
   `);
+
+  // Start background blockchain sync (runs initial sync after 5s, then every 60s)
+  startBackgroundSync(60000);
 });
