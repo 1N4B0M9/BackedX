@@ -1,7 +1,7 @@
 # BackedX
 
 
-**🏆 3rd Place Ripple Prize: TartanHacks 2026
+🏆 3rd Place Ripple Prize: TartanHacks 2026
 **Asset-Backed NFTs on the XRP Ledger**
 
 Transform real-world assets into verifiable, tradeable NFTs backed by XRP escrow. Mint, trade, and redeem with full transparency on XRPL Testnet.
